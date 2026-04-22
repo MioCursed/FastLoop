@@ -36,6 +36,7 @@ const requiredSources = [
   path.join(workspaceRoot, "CHANGELOG.md"),
   path.join(workspaceRoot, "release", "README.md"),
   path.join(workspaceRoot, "release", "CHECKLIST.md"),
+  path.join(workspaceRoot, "release", "release-notes-template.md"),
   path.join(workspaceRoot, "release", "SIGNING.md"),
   path.join(templateRoot, "Install-FastLoop.ps1"),
   path.join(templateRoot, "Install-FastLoop.cmd")
@@ -66,6 +67,10 @@ function runPowerShell(command) {
 
 function renderPortableInstallScript(template, currentVersion) {
   return template.replaceAll("__FASTLOOP_VERSION__", currentVersion);
+}
+
+function renderReleaseNotes(template, currentVersion) {
+  return template.replaceAll("__VERSION__", currentVersion);
 }
 
 function createInstallerBatch() {
@@ -178,26 +183,11 @@ execFileSync("iexpress.exe", ["/N", sedPath], {
   stdio: "inherit"
 });
 
-const releaseNotes = [
-  `# FastLoop ${version}`,
-  "",
-  "## Downloads",
-  "",
-  "- `FastLoop-Windows-x64-Setup.exe` is the primary installer for end users.",
-  "- `FastLoop-Windows-x64.zip` is the secondary portable package.",
-  "",
-  "## Included Runtime",
-  "",
-  "- packaged Windows engine runtime",
-  "- CEP panel bundle for Premiere Pro and After Effects",
-  "- install scripts for release and portable scenarios",
-  "",
-  "## Notes",
-  "",
-  "- GitHub Releases is the main installation path.",
-  "- These assets are structured for future signing, but current output remains prerelease/unsigned."
-].join("\n");
-await writeFile(releaseNotesPath, `${releaseNotes}\n`, "utf8");
+const releaseNotesTemplate = await readFile(
+  path.join(workspaceRoot, "release", "release-notes-template.md"),
+  "utf8"
+);
+await writeFile(releaseNotesPath, `${renderReleaseNotes(releaseNotesTemplate, version)}\n`, "utf8");
 
 const installerChecksum = await sha256(installerPath);
 const portableZipChecksum = await sha256(portableZipPath);

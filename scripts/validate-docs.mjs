@@ -9,6 +9,7 @@ const requiredFiles = [
   "CHANGELOG.md",
   "release/README.md",
   "release/CHECKLIST.md",
+  "release/release-notes-template.md",
   "release/SIGNING.md",
   "release/signing.env.example",
   ".github/workflows/release.yml",
