@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.1-beta.1
+## 0.1.1-beta.2
 
 - aligns the next prerelease around GitHub Releases as the primary install path
 - keeps `FastLoop-Windows-x64-Setup.exe` as the primary download and `FastLoop-Windows-x64.zip` as the fallback

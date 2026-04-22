@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: "Prerelease tag to publish, for example v0.1.1-beta.1"
+        description: "Prerelease tag to publish, for example v0.1.1-beta.2"
         required: true
       release_title:
         description: "Optional GitHub Release title override"
