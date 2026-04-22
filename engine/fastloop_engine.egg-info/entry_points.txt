@@ -1,0 +1,2 @@
+[console_scripts]
+fastloop-engine = fastloop_engine.cli:main

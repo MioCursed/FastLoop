@@ -1,0 +1,35 @@
+{
+  "name": "fastloop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Adobe CEP extension scaffold for editor-focused loop analysis in Premiere Pro and After Effects.",
+  "workspaces": [
+    "panel",
+    "shared",
+    "mock"
+  ],
+  "scripts": {
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "build:shared": "npm run build --workspace shared",
+    "build:panel": "npm run build --workspace panel",
+    "build:mock": "npm run build --workspace mock",
+    "build:panel:smoke": "tsc -p panel/tsconfig.smoke.json",
+    "build:mock:smoke": "tsc -p mock/tsconfig.smoke.json",
+    "dev:panel": "npm run dev --workspace panel",
+    "dev:mock": "npm run dev --workspace mock",
+    "smoke:panel": "npm run build:panel:smoke && node ./scripts/smoke-panel.mjs",
+    "smoke:shared": "node ./scripts/smoke-shared.mjs",
+    "smoke:mock": "npm run build:panel:smoke && npm run build:mock:smoke && node ./scripts/smoke-mock.mjs",
+    "smoke:host": "node ./scripts/smoke-host-payload.mjs"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.6.0",
+    "jsdom": "^27.0.1",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.9"
+  }
+}

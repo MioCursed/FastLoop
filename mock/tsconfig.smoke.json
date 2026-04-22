@@ -1,0 +1,20 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": ".smoke-dist",
+    "rootDir": "src",
+    "baseUrl": ".",
+    "paths": {
+      "@fastloop/shared": [
+        "../shared/dist/index.d.ts"
+      ],
+      "@fastloop/shared/*": [
+        "../shared/dist/*"
+      ]
+    }
+  },
+  "include": [
+    "src/mockData.ts"
+  ]
+}

@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fastloop-engine"
+version = "0.1.0"
+description = "Python-first analysis engine for FastLoop."
+requires-python = ">=3.11"
+dependencies = [
+  "librosa>=0.10.2",
+  "numpy>=2.0.0",
+  "scipy>=1.13.0",
+  "soundfile>=0.12.1"
+]
+
+[project.scripts]
+fastloop-engine = "fastloop_engine.cli:main"
