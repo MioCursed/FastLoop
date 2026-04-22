@@ -6,11 +6,17 @@ const workspaceRoot = "c:/Users/Nataniel/Downloads/FastLoop";
 async function runPremiereValidation() {
   const code = await readFile(`${workspaceRoot}/host-premiere/jsx/fastloop_premiere.jsx`, "utf8");
   const createdMarkers = [];
+  const importedAssets = [];
   const context = {
     JSON,
     $: {},
     app: {
       project: {
+        rootItem: { name: "Root" },
+        importFiles(filePaths) {
+          importedAssets.push(...filePaths);
+          return true;
+        },
         activeSequence: {
           markers: {
             createMarker(time) {
@@ -44,13 +50,14 @@ async function runPremiereValidation() {
         id: "candidate-02",
         startSeconds: 4.5,
         endSeconds: 12.5
-      }
+      },
+      renderedAssetPath: "C:/exports/candidate-02.extended.wav"
     })
   );
-  if (commitResult !== "ok" || createdMarkers.length !== 5) {
+  if (commitResult !== "ok" || createdMarkers.length !== 5 || importedAssets.length !== 1) {
     throw new Error("Premiere host commit validation failed.");
   }
-  return createdMarkers;
+  return { createdMarkers, importedAssets };
 }
 
 async function runAfterEffectsValidation() {
@@ -59,12 +66,22 @@ async function runAfterEffectsValidation() {
   const context = {
     JSON,
     $: {},
+    File: function File(path) {
+      this.fsName = path;
+    },
+    ImportOptions: function ImportOptions(file) {
+      this.file = file;
+    },
     MarkerValue: function MarkerValue(name) {
       this.name = name;
       this.comment = "";
     },
     app: {
       project: {
+        importFile(importOptions) {
+          placedMarkers.push({ imported: importOptions.file.fsName });
+          return { imported: true };
+        },
         activeItem: {
           markerProperty: {
             setValueAtTime(time, markerValue) {
@@ -96,10 +113,11 @@ async function runAfterEffectsValidation() {
         id: "candidate-02",
         startSeconds: 4.5,
         endSeconds: 12.5
-      }
+      },
+      renderedAssetPath: "C:/exports/candidate-02.extended.wav"
     })
   );
-  if (commitResult !== "ok" || placedMarkers.length !== 5) {
+  if (commitResult !== "ok" || placedMarkers.length !== 6) {
     throw new Error("After Effects host commit validation failed.");
   }
   return placedMarkers;
@@ -113,12 +131,14 @@ const [premiereMarkers, afterEffectsMarkers] = await Promise.all([
 console.log(
   JSON.stringify(
     {
-      premiereMarkers: premiereMarkers.length,
+      premiereMarkers: premiereMarkers.createdMarkers.length,
       afterEffectsMarkers: afterEffectsMarkers.length,
-      firstPremiereMarkerTime: premiereMarkers[0].time,
+      firstPremiereMarkerTime: premiereMarkers.createdMarkers[0].time,
       firstAfterEffectsMarkerTime: afterEffectsMarkers[0].time,
-      committedPremiereMarkerTime: premiereMarkers[4].time,
-      committedAfterEffectsMarkerTime: afterEffectsMarkers[4].time
+      committedPremiereMarkerTime: premiereMarkers.createdMarkers[4].time,
+      committedAfterEffectsMarkerTime: afterEffectsMarkers[5].time,
+      premiereImportedAsset: premiereMarkers.importedAssets[0],
+      afterEffectsImportedAsset: afterEffectsMarkers.find((entry) => entry.imported)?.imported
     },
     null,
     2

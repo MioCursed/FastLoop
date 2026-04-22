@@ -40,16 +40,20 @@ export interface ExportPlanRequest {
   includeOutro: boolean;
   includeExtendedMix: boolean;
   durationTargetSeconds: number;
+  outputDirectory?: string | null;
 }
 
 export interface CommitCandidateRequest {
   trackId: string;
   candidate: LoopCandidate;
+  renderedAssetPath?: string | null;
 }
 
 export interface PanelBridge {
   getHostCapabilities(): Promise<HostCapabilities>;
   analyzeTrack(request: AnalyzeTrackRequest): Promise<AnalysisResult>;
+  pickSourceFile(initialPath?: string | null): Promise<string | null>;
+  pickOutputDirectory(initialPath?: string | null): Promise<string | null>;
   placeMarkers(request: PlaceMarkersRequest): Promise<{ ok: boolean; message: string }>;
   previewCandidate(request: PreviewCandidateRequest): Promise<PreviewResult>;
   exportCandidate(request: ExportPlanRequest): Promise<ExportResult>;

@@ -36,6 +36,7 @@ let lastMarkerRequest = null;
 let lastCommitRequest = null;
 let lastPreviewResult = null;
 let lastExportResult = null;
+let lastPickedOutputDirectory = null;
 
 window.__FASTLOOP_BRIDGE__ = {
   async getHostCapabilities() {
@@ -44,7 +45,7 @@ window.__FASTLOOP_BRIDGE__ = {
       markers: { available: true, reason: "Smoke bridge marker validation." },
       timelineTiming: { available: true },
       compTiming: { available: true },
-      exportHandOff: { available: false, reason: "Not used in Block 3 smoke." }
+      exportHandOff: { available: true, reason: "Smoke bridge validates rendered-asset handoff." }
     };
   },
   async analyzeTrack(request) {
@@ -68,6 +69,13 @@ window.__FASTLOOP_BRIDGE__ = {
     );
 
     return JSON.parse(stdout);
+  },
+  async pickSourceFile() {
+    return fixturePath;
+  },
+  async pickOutputDirectory(initialPath) {
+    lastPickedOutputDirectory = initialPath || `${workspaceRoot}/.fastloop-output/smoke-panel`;
+    return lastPickedOutputDirectory;
   },
   async placeMarkers(request) {
     lastMarkerRequest = request;
@@ -113,7 +121,8 @@ window.__FASTLOOP_BRIDGE__ = {
         "--scoring-mode",
         request.scoringMode,
         "--warnings-json",
-        JSON.stringify(request.warnings)
+        JSON.stringify(request.warnings),
+        ...(request.outputDirectory ? ["--output-dir", request.outputDirectory] : [])
       ],
       {
         cwd: workspaceRoot,
@@ -129,7 +138,11 @@ window.__FASTLOOP_BRIDGE__ = {
   },
   async commitCandidate(request) {
     lastCommitRequest = request;
-    return { ok: true, message: `Smoke commit accepted for ${request.candidate.id}.` };
+    return {
+      ok: true,
+      message: `Smoke commit accepted for ${request.candidate.id}.`,
+      importedAssetPath: request.renderedAssetPath ?? null
+    };
   },
   async getQueue() {
     return [];
@@ -141,9 +154,14 @@ await appModule.mountApp(window.document.querySelector("#app"), {
   bridge: window.__FASTLOOP_BRIDGE__
 });
 
-const pathInput = window.document.querySelector("#track-path-input");
-pathInput.value = fixturePath;
-pathInput.dispatchEvent(new window.Event("input", { bubbles: true }));
+window.document.querySelector("#choose-track-button").dispatchEvent(
+  new window.MouseEvent("click", { bubbles: true })
+);
+await new Promise((resolve) => setTimeout(resolve, 0));
+window.document.querySelector("#sidebar-choose-output-button").dispatchEvent(
+  new window.MouseEvent("click", { bubbles: true })
+);
+await new Promise((resolve) => setTimeout(resolve, 0));
 
 window.document.querySelector('[data-duration-target="30"]')?.dispatchEvent(
   new window.MouseEvent("click", { bubbles: true })
@@ -194,6 +212,8 @@ const modeText = [...window.document.querySelectorAll(".metric-grid span")]
   .find((node) => node.textContent === "Mode")
   ?.nextElementSibling?.textContent;
 const previewAudio = window.document.querySelector("#preview-audio");
+const sourcePathValue = window.document.querySelector("#track-path-input")?.value ?? "";
+const exportDirectoryValue = window.document.querySelector("#export-directory-input")?.value ?? "";
 
 if (
   !bpmText ||
@@ -203,8 +223,11 @@ if (
   !lastPreviewResult ||
   !lastExportResult ||
   !previewAudio ||
+  !sourcePathValue.includes("loop_fixture.wav") ||
+  !exportDirectoryValue.includes(".fastloop-output/smoke-panel") ||
   targetText !== "30s" ||
-  modeText !== "duration-priority"
+  modeText !== "duration-priority" ||
+  lastPickedOutputDirectory === null
 ) {
   throw new Error("Panel smoke validation failed: render or payload flow is incomplete.");
 }
@@ -219,6 +242,8 @@ console.log(
       previewPath: lastPreviewResult.previewFilePath,
       exportMetadataPath: lastExportResult.artifacts.metadataPath,
       committedCandidateId: lastCommitRequest.candidate.id,
+      commitAssetPath: lastCommitRequest.renderedAssetPath,
+      exportOutputDirectory: lastExportResult.outputDirectory,
       targetText,
       modeText
     },

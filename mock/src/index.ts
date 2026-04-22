@@ -15,11 +15,17 @@ window.__FASTLOOP_BRIDGE__ = {
       markers: { available: true, reason: "Mock marker placement enabled for UI development." },
       timelineTiming: { available: true },
       compTiming: { available: true },
-      exportHandOff: { available: false, reason: "Mock mode does not export through Adobe." }
+      exportHandOff: { available: true, reason: "Mock mode accepts rendered-asset handoff payloads for UI validation." }
     };
   },
   async analyzeTrack(request) {
     return createMockAnalysis(request.trackId, request.durationTargetSeconds, request.scoringMode);
+  },
+  async pickSourceFile() {
+    return "c:/Users/Nataniel/Downloads/FastLoop/engine/tests/generated/loop_fixture.wav";
+  },
+  async pickOutputDirectory(initialPath) {
+    return initialPath || "c:/mock-fastloop/exports";
   },
   async placeMarkers(request) {
     window.__FASTLOOP_LAST_MARKER_REQUEST__ = request;
@@ -36,7 +42,7 @@ window.__FASTLOOP_BRIDGE__ = {
     };
   },
   async exportCandidate(request) {
-    const outputDirectory = `c:/mock-fastloop/${request.trackId}/${request.candidate.id}`;
+    const outputDirectory = `${request.outputDirectory || "c:/mock-fastloop"}/exports/${request.trackId}/${request.candidate.id}`;
     const artifacts = {
       introPath: `${outputDirectory}/${request.candidate.id}.intro.wav`,
       loopPath: `${outputDirectory}/${request.candidate.id}.loop.wav`,
@@ -74,7 +80,13 @@ window.__FASTLOOP_BRIDGE__ = {
     return { ok: result.ok, artifacts: Object.values(result.artifacts) };
   },
   async commitCandidate(request) {
-    return { ok: true, message: `Mock commit accepted for ${request.candidate.id}.` };
+    return {
+      ok: true,
+      message: request.renderedAssetPath
+        ? `Mock commit accepted for ${request.candidate.id} with rendered asset handoff.`
+        : `Mock commit accepted for ${request.candidate.id}.`,
+      importedAssetPath: request.renderedAssetPath ?? null
+    };
   },
   async getQueue() {
     return [

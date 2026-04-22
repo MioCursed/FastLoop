@@ -124,6 +124,13 @@ button:disabled {
   text-align: left;
 }
 
+.button-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 10px;
+}
+
 .input-block {
   display: grid;
   gap: 6px;

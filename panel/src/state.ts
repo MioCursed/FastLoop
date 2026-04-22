@@ -26,6 +26,7 @@ export interface PanelState {
   previewStatus: ActionStatus;
   exportStatus: ActionStatus;
   commitStatus: ActionStatus;
+  exportDirectory: string;
   lastPreview: PreviewResult | null;
   lastExport: ExportResult | null;
   statusMessage: string | null;
@@ -62,6 +63,7 @@ export function createInitialState(): PanelState {
     previewStatus: "idle",
     exportStatus: "idle",
     commitStatus: "idle",
+    exportDirectory: "",
     lastPreview: null,
     lastExport: null,
     statusMessage: "Ready for analysis.",

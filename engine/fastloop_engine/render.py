@@ -42,6 +42,7 @@ class ExportRenderRequest:
     duration_target_seconds: float
     scoring_mode: str
     warnings: list[str]
+    output_directory: str | None = None
 
 
 def preview_candidate(request: PreviewRenderRequest, config: EngineConfig | None = None) -> dict[str, Any]:
@@ -106,7 +107,8 @@ def export_candidate(request: ExportRenderRequest, config: EngineConfig | None =
         ]
     ).astype(np.float32)
 
-    output_directory = Path(config.output_directory) / "exports" / request.track_id / candidate.candidate_id
+    base_output_directory = Path(request.output_directory) if request.output_directory else Path(config.output_directory)
+    output_directory = base_output_directory / "exports" / request.track_id / candidate.candidate_id
     output_directory.mkdir(parents=True, exist_ok=True)
 
     intro_path = output_directory / f"{candidate.candidate_id}.intro.wav"

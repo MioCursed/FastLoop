@@ -1,0 +1,64 @@
+import { access, readFile } from "node:fs/promises";
+import path from "node:path";
+
+const workspaceRoot = process.cwd();
+
+const requiredFiles = [
+  "README.md",
+  "INSTALL.md",
+  "release/README.md",
+  "release/CHECKLIST.md",
+  "scripts/build-release.mjs",
+  "scripts/build-engine-runtime.mjs"
+];
+
+for (const relativePath of requiredFiles) {
+  await access(path.join(workspaceRoot, relativePath));
+}
+
+const [readme, installGuide] = await Promise.all([
+  readFile(path.join(workspaceRoot, "README.md"), "utf8"),
+  readFile(path.join(workspaceRoot, "INSTALL.md"), "utf8")
+]);
+
+const readmeExpectations = [
+  "Current Status",
+  "packaged Windows engine runtime",
+  "file picker",
+  "export destination",
+  "release:build",
+  "INSTALL.md"
+];
+
+const installExpectations = [
+  "End-User Install",
+  "Developer Setup",
+  "release:build",
+  "build:engine-runtime",
+  "CEP extension",
+  "manual Python install"
+];
+
+for (const expected of readmeExpectations) {
+  if (!readme.includes(expected)) {
+    throw new Error(`README.md is missing expected text: ${expected}`);
+  }
+}
+
+for (const expected of installExpectations) {
+  if (!installGuide.includes(expected)) {
+    throw new Error(`INSTALL.md is missing expected text: ${expected}`);
+  }
+}
+
+console.log(
+  JSON.stringify(
+    {
+      requiredFiles: requiredFiles.length,
+      readmeChecks: readmeExpectations.length,
+      installChecks: installExpectations.length
+    },
+    null,
+    2
+  )
+);

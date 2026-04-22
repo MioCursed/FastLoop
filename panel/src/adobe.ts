@@ -12,6 +12,7 @@ declare global {
     __FASTLOOP_BRIDGE__?: PanelBridge;
     __FASTLOOP_WORKSPACE_ROOT__?: string;
     __FASTLOOP_PYTHON_BIN__?: string;
+    __FASTLOOP_ENGINE_BIN__?: string;
     CSInterface?: new () => {
       getApplicationID(): string;
       evalScript(script: string, callback: (result: string) => void): void;
@@ -23,6 +24,7 @@ declare global {
 interface DesktopRuntime {
   cwd: string;
   pythonBin: string;
+  engineBin: string | null;
   execFileSync: (
     file: string,
     args: string[],
@@ -32,6 +34,7 @@ interface DesktopRuntime {
     dirname(pathname: string): string;
     resolve(...segments: string[]): string;
     basename(pathname: string): string;
+    join(...segments: string[]): string;
   };
   fileURLToPath: (url: string) => string;
 }
@@ -90,9 +93,26 @@ function getDesktopRuntime(): DesktopRuntime | null {
         ? path.resolve(htmlDirectory, "..", "..")
         : path.resolve(htmlDirectory, ".."));
 
+    const packagedCandidates = [
+      window.__FASTLOOP_ENGINE_BIN__ ?? "",
+      path.resolve(cwd, "engine-runtime", "windows-x64", "fastloop-engine-runtime", "fastloop-engine-runtime.exe"),
+      path.resolve(
+        cwd,
+        "release",
+        "build",
+        "runtime",
+        "windows-x64",
+        "fastloop-engine-runtime",
+        "fastloop-engine-runtime.exe"
+      )
+    ];
+    const fs = nodeRequire("node:fs") as { existsSync: (target: string) => boolean };
+    const engineBin = packagedCandidates.find((candidate) => candidate && fs.existsSync(candidate)) ?? null;
+
     return {
       cwd,
       pythonBin: window.__FASTLOOP_PYTHON_BIN__ ?? "python",
+      engineBin,
       execFileSync: childProcess.execFileSync,
       path,
       fileURLToPath: url.fileURLToPath
@@ -103,24 +123,15 @@ function getDesktopRuntime(): DesktopRuntime | null {
 }
 
 function runEngineAnalysis(runtime: DesktopRuntime, request: AnalyzeTrackRequest) {
-  const stdout = runtime.execFileSync(
-    runtime.pythonBin,
-    [
-      "-m",
-      "fastloop_engine.cli",
-      request.sourcePath,
-      "--track-id",
-      request.trackId,
-      "--duration-target",
-      String(request.durationTargetSeconds),
-      "--scoring-mode",
-      request.scoringMode
-    ],
-    {
-      cwd: runtime.cwd,
-      encoding: "utf8"
-    }
-  );
+  const stdout = runRuntimeCommand(runtime, "analyze", [
+    request.sourcePath,
+    "--track-id",
+    request.trackId,
+    "--duration-target",
+    String(request.durationTargetSeconds),
+    "--scoring-mode",
+    request.scoringMode
+  ]);
 
   return JSON.parse(stdout);
 }
@@ -130,16 +141,78 @@ function runEngineRenderCommand(
   command: "preview" | "export",
   args: string[]
 ) {
+  const stdout = runRuntimeCommand(
+    runtime,
+    command,
+    args
+  );
+
+  return JSON.parse(stdout);
+}
+
+function sanitizeDialogPath(pathname: string | null | undefined): string | null {
+  if (!pathname) {
+    return null;
+  }
+
+  return pathname.replace(/'/g, "''");
+}
+
+function openWindowsDialog(
+  runtime: DesktopRuntime,
+  dialogType: "file" | "directory",
+  initialPath?: string | null
+): string | null {
+  const initial = sanitizeDialogPath(initialPath);
+  const binary = runtime.path.resolve(process.env.SystemRoot ?? "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
+  const script =
+    dialogType === "file"
+      ? [
+          "Add-Type -AssemblyName System.Windows.Forms",
+          "$dialog = New-Object System.Windows.Forms.OpenFileDialog",
+          "$dialog.Filter = 'Audio Files|*.wav;*.mp3;*.flac;*.m4a;*.aiff;*.aif;*.ogg|All Files|*.*'",
+          "$dialog.Multiselect = $false",
+          initial ? `$dialog.InitialDirectory = '${initial}'` : "",
+          "$result = $dialog.ShowDialog()",
+          "if ($result -eq [System.Windows.Forms.DialogResult]::OK) { Write-Output $dialog.FileName }"
+        ]
+      : [
+          "Add-Type -AssemblyName System.Windows.Forms",
+          "$dialog = New-Object System.Windows.Forms.FolderBrowserDialog",
+          initial ? `$dialog.SelectedPath = '${initial}'` : "",
+          "$result = $dialog.ShowDialog()",
+          "if ($result -eq [System.Windows.Forms.DialogResult]::OK) { Write-Output $dialog.SelectedPath }"
+        ];
+
   const stdout = runtime.execFileSync(
-    runtime.pythonBin,
-    ["-m", "fastloop_engine.render_cli", command, ...args],
+    binary,
+    ["-NoProfile", "-STA", "-Command", script.filter(Boolean).join("; ")],
+    {
+      cwd: runtime.cwd,
+      encoding: "utf8"
+    }
+  ).trim();
+
+  return stdout || null;
+}
+
+function runRuntimeCommand(
+  runtime: DesktopRuntime,
+  command: "analyze" | "preview" | "export",
+  args: string[]
+) {
+  const binary = runtime.engineBin ?? runtime.pythonBin;
+  const binaryArgs = runtime.engineBin
+    ? [command, ...args]
+    : ["-m", "fastloop_engine.runtime_cli", command, ...args];
+  return runtime.execFileSync(
+    binary,
+    binaryArgs,
     {
       cwd: runtime.cwd,
       encoding: "utf8"
     }
   );
-
-  return JSON.parse(stdout);
 }
 
 function createAdobeBridge(): PanelBridge {
@@ -159,12 +232,19 @@ function createAdobeBridge(): PanelBridge {
 
   return {
     async getHostCapabilities(): Promise<HostCapabilities> {
+      const exportHandOff =
+        host === "premiere" || host === "aftereffects"
+          ? { available: true }
+          : {
+              available: false,
+              reason: "Rendered asset handoff is available only inside Adobe hosts."
+            };
       return {
         host,
         markers: { available: host === "premiere" || host === "aftereffects" },
         timelineTiming: { available: host === "premiere" },
         compTiming: { available: host === "aftereffects" },
-        exportHandOff: { available: false, reason: "Reserved for later host-side export handoff." }
+        exportHandOff
       };
     },
     async analyzeTrack(request: AnalyzeTrackRequest) {
@@ -172,6 +252,30 @@ function createAdobeBridge(): PanelBridge {
         return runEngineAnalysis(runtime, request);
       }
       throw new Error("Engine runtime unavailable. Use CEP with Node enabled or the mock bridge.");
+    },
+    async pickSourceFile(initialPath) {
+      if (!runtime) {
+        const mockBridge = window.__FASTLOOP_BRIDGE__;
+        if (!mockBridge || !mockBridge.pickSourceFile) {
+          return null;
+        }
+        return mockBridge.pickSourceFile(initialPath);
+      }
+
+      const initialDirectory = initialPath ? runtime.path.dirname(initialPath) : runtime.cwd;
+      return openWindowsDialog(runtime, "file", initialDirectory);
+    },
+    async pickOutputDirectory(initialPath) {
+      if (!runtime) {
+        const mockBridge = window.__FASTLOOP_BRIDGE__;
+        if (!mockBridge || !mockBridge.pickOutputDirectory) {
+          return null;
+        }
+        return mockBridge.pickOutputDirectory(initialPath);
+      }
+
+      const defaultDirectory = initialPath ?? runtime.path.join(runtime.cwd, ".fastloop-output");
+      return openWindowsDialog(runtime, "directory", defaultDirectory);
     },
     async placeMarkers(request: PlaceMarkersRequest) {
       if (host !== "premiere" && host !== "aftereffects") {
@@ -217,7 +321,7 @@ function createAdobeBridge(): PanelBridge {
         request.scoringMode,
         "--warnings-json",
         JSON.stringify(request.warnings)
-      ]);
+      ].concat(request.outputDirectory ? ["--output-dir", request.outputDirectory] : []));
     },
     async buildExportPlan(request: ExportPlanRequest) {
       if (runtime) {
@@ -233,7 +337,7 @@ function createAdobeBridge(): PanelBridge {
     },
     async commitCandidate(request: CommitCandidateRequest) {
       if (host !== "premiere" && host !== "aftereffects") {
-        return { ok: false, message: "Host bridge unavailable for commit." };
+        return { ok: false, message: "Host bridge unavailable for commit.", importedAssetPath: null };
       }
 
       const payload = JSON.stringify(request).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
@@ -242,7 +346,11 @@ function createAdobeBridge(): PanelBridge {
           ? "$._fastloopPremiere.commitCandidate('" + payload + "')"
           : "$._fastloopAfterEffects.commitCandidate('" + payload + "')";
       const result = await evalHost(script);
-      return { ok: result === "ok", message: result };
+      return {
+        ok: result === "ok",
+        message: result,
+        importedAssetPath: request.renderedAssetPath ?? null
+      };
     },
     async getQueue() {
       const mockBridge = window.__FASTLOOP_BRIDGE__;

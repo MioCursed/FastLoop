@@ -30,6 +30,7 @@ def build_parser() -> argparse.ArgumentParser:
     export_parser.add_argument("--duration-target", type=float, default=0.0)
     export_parser.add_argument("--scoring-mode", default="smart")
     export_parser.add_argument("--warnings-json", default="[]")
+    export_parser.add_argument("--output-dir")
     return parser
 
 
@@ -57,6 +58,7 @@ def main() -> None:
               duration_target_seconds=args.duration_target,
               scoring_mode=args.scoring_mode,
               warnings=list(json.loads(args.warnings_json)),
+              output_directory=args.output_dir,
           ),
           config=config,
       )

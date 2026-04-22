@@ -133,4 +133,5 @@ export interface ExportResult {
 export interface CommitCandidateResult {
   ok: boolean;
   message: string;
+  importedAssetPath?: string | null;
 }

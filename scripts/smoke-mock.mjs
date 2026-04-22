@@ -38,11 +38,17 @@ window.__FASTLOOP_BRIDGE__ = {
       markers: { available: true, reason: "Mock smoke marker bridge." },
       timelineTiming: { available: true },
       compTiming: { available: true },
-      exportHandOff: { available: false, reason: "Mock smoke export not used." }
+      exportHandOff: { available: true, reason: "Mock smoke validates rendered-asset handoff." }
     };
   },
   async analyzeTrack(request) {
     return createMockAnalysis(request.trackId, request.durationTargetSeconds, request.scoringMode);
+  },
+  async pickSourceFile() {
+    return `${workspaceRoot}/engine/tests/generated/loop_fixture.wav`;
+  },
+  async pickOutputDirectory(initialPath) {
+    return initialPath || `${workspaceRoot}/.fastloop-output/mock-smoke`;
   },
   async placeMarkers(request) {
     lastMarkerRequest = request;
@@ -59,7 +65,7 @@ window.__FASTLOOP_BRIDGE__ = {
     };
   },
   async exportCandidate(request) {
-    const outputDirectory = `${workspaceRoot}/.fastloop-output/mock/${request.trackId}/${request.candidate.id}`;
+    const outputDirectory = `${request.outputDirectory || `${workspaceRoot}/.fastloop-output/mock`}/exports/${request.trackId}/${request.candidate.id}`;
     const artifacts = {
       introPath: `${outputDirectory}/${request.candidate.id}.intro.wav`,
       loopPath: `${outputDirectory}/${request.candidate.id}.loop.wav`,
@@ -98,7 +104,11 @@ window.__FASTLOOP_BRIDGE__ = {
   },
   async commitCandidate(request) {
     lastCommitRequest = request;
-    return { ok: true, message: `Mock commit accepted for ${request.candidate.id}.` };
+    return {
+      ok: true,
+      message: `Mock commit accepted for ${request.candidate.id}.`,
+      importedAssetPath: request.renderedAssetPath ?? null
+    };
   },
   async getQueue() {
     return [
@@ -116,6 +126,14 @@ window.__FASTLOOP_BRIDGE__ = {
 await mountApp(window.document.querySelector("#app"), {
   bridge: window.__FASTLOOP_BRIDGE__
 });
+window.document.querySelector("#choose-track-button").dispatchEvent(
+  new window.MouseEvent("click", { bubbles: true })
+);
+await new Promise((resolve) => setTimeout(resolve, 0));
+window.document.querySelector("#sidebar-choose-output-button").dispatchEvent(
+  new window.MouseEvent("click", { bubbles: true })
+);
+await new Promise((resolve) => setTimeout(resolve, 0));
 
 window.document.querySelector('[data-duration-target="20"]')?.dispatchEvent(
   new window.MouseEvent("click", { bubbles: true })
@@ -172,6 +190,7 @@ console.log(
       queueRows: window.document.querySelectorAll(".queue-row").length,
       markerTrackId: lastMarkerRequest.trackId,
       commitTrackId: lastCommitRequest.trackId,
+      commitAssetPath: lastCommitRequest.renderedAssetPath,
       scoringMode: modeValue
     },
     null,

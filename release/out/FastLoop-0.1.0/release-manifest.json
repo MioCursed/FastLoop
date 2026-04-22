@@ -1,0 +1,21 @@
+{
+  "product": "FastLoop",
+  "version": "0.1.0",
+  "builtAt": "2026-04-22T14:35:49.558Z",
+  "extensionBundlePath": "C:\\Users\\Nataniel\\Downloads\\FastLoop\\release\\out\\FastLoop-0.1.0\\FastLoop",
+  "artifacts": {
+    "manifest": "C:\\Users\\Nataniel\\Downloads\\FastLoop\\release\\out\\FastLoop-0.1.0\\FastLoop\\CSXS\\manifest.xml",
+    "panelEntry": "C:\\Users\\Nataniel\\Downloads\\FastLoop\\release\\out\\FastLoop-0.1.0\\FastLoop\\dist\\index.html",
+    "hostIndex": "C:\\Users\\Nataniel\\Downloads\\FastLoop\\release\\out\\FastLoop-0.1.0\\FastLoop\\host-index.jsx",
+    "premiereHost": "C:\\Users\\Nataniel\\Downloads\\FastLoop\\release\\out\\FastLoop-0.1.0\\FastLoop\\host-premiere\\jsx\\fastloop_premiere.jsx",
+    "afterEffectsHost": "C:\\Users\\Nataniel\\Downloads\\FastLoop\\release\\out\\FastLoop-0.1.0\\FastLoop\\host-aftereffects\\jsx\\fastloop_aftereffects.jsx",
+    "installGuide": "C:\\Users\\Nataniel\\Downloads\\FastLoop\\release\\out\\FastLoop-0.1.0\\INSTALL.md",
+    "releaseGuide": "C:\\Users\\Nataniel\\Downloads\\FastLoop\\release\\out\\FastLoop-0.1.0\\RELEASE.md",
+    "packagedRuntime": "C:\\Users\\Nataniel\\Downloads\\FastLoop\\release\\out\\FastLoop-0.1.0\\FastLoop\\engine-runtime\\windows-x64\\fastloop-engine-runtime\\fastloop-engine-runtime.exe"
+  },
+  "notes": [
+    "Unsigned CEP bundle for staging and manual install.",
+    "Windows packaged engine runtime is bundled when present so end users do not need to install Python.",
+    "ZXPSignCMD signing is intentionally left for the next release step."
+  ]
+}

@@ -28,6 +28,7 @@ export function createInitialState() {
         previewStatus: "idle",
         exportStatus: "idle",
         commitStatus: "idle",
+        exportDirectory: "",
         lastPreview: null,
         lastExport: null,
         statusMessage: "Ready for analysis.",

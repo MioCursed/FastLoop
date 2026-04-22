@@ -14,6 +14,8 @@ interface MountOptions {
   initialState?: PanelState;
 }
 
+const EXPORT_DIRECTORY_STORAGE_KEY = "fastloop.exportDirectory";
+
 function escapeHtml(value: string): string {
   return value
     .replaceAll("&", "&amp;")
@@ -47,6 +49,26 @@ function formatActionStatus(status: ActionStatus): string {
       return "Failed";
     default:
       return "Idle";
+  }
+}
+
+function readStoredValue(key: string): string {
+  try {
+    return window.localStorage.getItem(key) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function writeStoredValue(key: string, value: string): void {
+  try {
+    if (value) {
+      window.localStorage.setItem(key, value);
+    } else {
+      window.localStorage.removeItem(key);
+    }
+  } catch {
+    // Ignore CEP storage failures and keep the in-memory state.
   }
 }
 
@@ -226,6 +248,10 @@ function renderExecutionBlock(state: PanelState): string {
         <span>Preview Mode</span>
         <strong>${state.previewMode}</strong>
       </div>
+      <div class="execution-row">
+        <span>Export Folder</span>
+        <strong>${escapeHtml(state.exportDirectory || "Default .fastloop-output")}</strong>
+      </div>
     </div>
     <div class="execution-panel">
       <div class="block-subtitle">Preview Output</div>
@@ -253,6 +279,7 @@ function render(state: PanelState): string {
           <span class="host-pill">${state.host?.host ?? "loading"}</span>
         </div>
         <div class="toolbar">
+          <button id="choose-track-button">Choose Audio</button>
           <button id="focus-path-button">Track Path</button>
           <button id="analyze-button" ${state.analysisStatus === "loading" ? "disabled" : ""}>Analyze Track</button>
           <button id="preview-button" ${canActOnCandidate && state.previewStatus !== "running" ? "" : "disabled"}>Preview Seamless Loop</button>
@@ -286,9 +313,22 @@ function render(state: PanelState): string {
                 `
               )
               .join("")}
+            <div class="button-row">
+              <button id="sidebar-choose-track-button">Choose Audio File</button>
+              <button id="sidebar-choose-output-button">Choose Export Folder</button>
+            </div>
             <label class="input-block">
               <span>Selected Track Source</span>
               <input id="track-path-input" type="text" value="${escapeHtml(track?.sourcePath ?? "")}" placeholder="Paste a local audio path" />
+            </label>
+            <label class="input-block">
+              <span>Export Destination</span>
+              <input
+                id="export-directory-input"
+                type="text"
+                value="${escapeHtml(state.exportDirectory)}"
+                placeholder="Choose a folder or keep the default FastLoop output"
+              />
             </label>
             <div class="status-line ${state.analysisStatus === "loading" ? "loading" : state.errorMessage ? "error" : "success"}">
               <span>${escapeHtml(state.errorMessage ?? state.statusMessage ?? "Ready.")}</span>
@@ -459,7 +499,8 @@ export async function mountApp(root: HTMLElement, options?: MountOptions): Promi
   const state: PanelState = {
     ...baseState,
     tracks: baseState.tracks.map((track) => ({ ...track })),
-    queue: baseState.queue.map((item) => ({ ...item }))
+    queue: baseState.queue.map((item) => ({ ...item })),
+    exportDirectory: readStoredValue(EXPORT_DIRECTORY_STORAGE_KEY) || baseState.exportDirectory
   };
 
   let previewAudio: HTMLAudioElement | null = null;
@@ -508,6 +549,11 @@ export async function mountApp(root: HTMLElement, options?: MountOptions): Promi
       const segments = track.sourcePath.split(/[\\/]/);
       track.name = segments[segments.length - 1] ?? track.name;
     }
+  }
+
+  function updateExportDirectory(nextPath: string): void {
+    state.exportDirectory = nextPath.trim();
+    writeStoredValue(EXPORT_DIRECTORY_STORAGE_KEY, state.exportDirectory);
   }
 
   function stopPreviewPlayback(): void {
@@ -581,6 +627,42 @@ export async function mountApp(root: HTMLElement, options?: MountOptions): Promi
       state.analysisStatus = "error";
       setStatus(null, error instanceof Error ? error.message : "Unknown analysis failure.");
       syncQueue("error", "failed");
+    }
+
+    renderApp();
+  }
+
+  async function chooseTrackSource(): Promise<void> {
+    try {
+      const nextPath = await bridge.pickSourceFile(selectedTrack(state)?.sourcePath ?? null);
+      if (!nextPath) {
+        setStatus("Track selection cancelled.", null);
+        renderApp();
+        return;
+      }
+
+      updateSelectedTrackPath(nextPath);
+      setStatus(`Selected source file ${selectedTrack(state)?.name ?? nextPath}.`, null);
+    } catch (error) {
+      setStatus(null, error instanceof Error ? error.message : "Unable to open the audio picker.");
+    }
+
+    renderApp();
+  }
+
+  async function chooseExportDirectory(): Promise<void> {
+    try {
+      const nextPath = await bridge.pickOutputDirectory(state.exportDirectory || null);
+      if (!nextPath) {
+        setStatus("Export destination selection cancelled.", null);
+        renderApp();
+        return;
+      }
+
+      updateExportDirectory(nextPath);
+      setStatus(`Export destination set to ${nextPath}.`, null);
+    } catch (error) {
+      setStatus(null, error instanceof Error ? error.message : "Unable to choose export destination.");
     }
 
     renderApp();
@@ -665,7 +747,8 @@ export async function mountApp(root: HTMLElement, options?: MountOptions): Promi
         includeLoop: true,
         includeOutro: true,
         includeExtendedMix: true,
-        durationTargetSeconds: state.durationTargetSeconds
+        durationTargetSeconds: state.durationTargetSeconds,
+        outputDirectory: state.exportDirectory || null
       });
       state.lastExport = response;
       state.exportStatus = response.ok ? "success" : "error";
@@ -697,7 +780,8 @@ export async function mountApp(root: HTMLElement, options?: MountOptions): Promi
     try {
       const response = await bridge.commitCandidate({
         trackId: track.id,
-        candidate
+        candidate,
+        renderedAssetPath: state.lastExport?.artifacts.extendedMixPath ?? null
       });
       state.commitStatus = response.ok ? "success" : "error";
       setStatus(response.message, response.ok ? null : response.message);
@@ -749,8 +833,20 @@ export async function mountApp(root: HTMLElement, options?: MountOptions): Promi
   }
 
   function bindEvents(): void {
+    root.querySelector("#choose-track-button")?.addEventListener("click", () => {
+      void chooseTrackSource();
+    });
+
     root.querySelector("#focus-path-button")?.addEventListener("click", () => {
       root.querySelector<HTMLInputElement>("#track-path-input")?.focus();
+    });
+
+    root.querySelector("#sidebar-choose-track-button")?.addEventListener("click", () => {
+      void chooseTrackSource();
+    });
+
+    root.querySelector("#sidebar-choose-output-button")?.addEventListener("click", () => {
+      void chooseExportDirectory();
     });
 
     root.querySelector("#analyze-button")?.addEventListener("click", () => {
@@ -775,6 +871,10 @@ export async function mountApp(root: HTMLElement, options?: MountOptions): Promi
 
     root.querySelector<HTMLInputElement>("#track-path-input")?.addEventListener("input", (event) => {
       updateSelectedTrackPath((event.currentTarget as HTMLInputElement).value);
+    });
+
+    root.querySelector<HTMLInputElement>("#export-directory-input")?.addEventListener("input", (event) => {
+      updateExportDirectory((event.currentTarget as HTMLInputElement).value);
     });
 
     for (const button of root.querySelectorAll<HTMLButtonElement>("[data-track-id]")) {
