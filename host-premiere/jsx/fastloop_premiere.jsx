@@ -32,3 +32,35 @@ $._fastloopPremiere.placeMarkers = function (raw) {
     return error.toString();
   }
 };
+
+$._fastloopPremiere.commitCandidate = function (raw) {
+  try {
+    var placement = $._fastloopPremiere.placeMarkers(raw);
+    if (placement !== "ok") {
+      return placement;
+    }
+
+    var payload = $._fastloopPremiere.parseJson(raw);
+    var sequence = app.project.activeSequence;
+    if (!sequence) {
+      return "No active Premiere sequence.";
+    }
+
+    var commitMarker = sequence.markers.createMarker(payload.candidate.startSeconds);
+    commitMarker.name = "FastLoop Commit";
+    commitMarker.comments =
+      "Committed " +
+      payload.candidate.id +
+      " for " +
+      payload.trackId +
+      " (" +
+      payload.candidate.startSeconds +
+      " -> " +
+      payload.candidate.endSeconds +
+      ")";
+
+    return "ok";
+  } catch (error) {
+    return error.toString();
+  }
+};

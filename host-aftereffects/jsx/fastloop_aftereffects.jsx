@@ -29,3 +29,35 @@ $._fastloopAfterEffects.placeMarkers = function (raw) {
     return error.toString();
   }
 };
+
+$._fastloopAfterEffects.commitCandidate = function (raw) {
+  try {
+    var placement = $._fastloopAfterEffects.placeMarkers(raw);
+    if (placement !== "ok") {
+      return placement;
+    }
+
+    var payload = $._fastloopAfterEffects.parseJson(raw);
+    var item = app.project.activeItem;
+    if (!item || !item.markerProperty) {
+      return "No active After Effects comp.";
+    }
+
+    var commitValue = new MarkerValue("FastLoop Commit");
+    commitValue.comment =
+      "Committed " +
+      payload.candidate.id +
+      " for " +
+      payload.trackId +
+      " (" +
+      payload.candidate.startSeconds +
+      " -> " +
+      payload.candidate.endSeconds +
+      ")";
+    item.markerProperty.setValueAtTime(payload.candidate.startSeconds, commitValue);
+
+    return "ok";
+  } catch (error) {
+    return error.toString();
+  }
+};

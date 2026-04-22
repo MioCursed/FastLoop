@@ -18,6 +18,7 @@
     "build:mock:smoke": "tsc -p mock/tsconfig.smoke.json",
     "dev:panel": "npm run dev --workspace panel",
     "dev:mock": "npm run dev --workspace mock",
+    "smoke:render": "python engine/tests/validate_render_actions.py",
     "smoke:panel": "npm run build:panel:smoke && node ./scripts/smoke-panel.mjs",
     "smoke:shared": "node ./scripts/smoke-shared.mjs",
     "smoke:mock": "npm run build:panel:smoke && npm run build:mock:smoke && node ./scripts/smoke-mock.mjs",

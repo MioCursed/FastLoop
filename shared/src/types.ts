@@ -6,6 +6,8 @@ export type ScoringMode =
   | "duration-priority"
   | "musical-similarity";
 
+export type PreviewMode = "cycle" | "repeat";
+
 export interface TransportCapability {
   available: boolean;
   reason?: string;
@@ -82,4 +84,53 @@ export interface QueueItem {
   candidateCount: number;
   durationTargetSeconds: number;
   exportState: "none" | "planned" | "done" | "failed";
+}
+
+export interface PreviewResult {
+  ok: boolean;
+  message: string;
+  candidateId: string;
+  previewMode: PreviewMode;
+  loopCycles: number;
+  previewFilePath: string;
+}
+
+export interface ExportArtifacts {
+  introPath: string;
+  loopPath: string;
+  outroPath: string;
+  extendedMixPath: string;
+  metadataPath: string;
+}
+
+export interface ExportMetadata {
+  version: string;
+  createdAt: string;
+  trackId: string;
+  sourcePath: string;
+  candidateId: string;
+  candidateStartSeconds: number;
+  candidateEndSeconds: number;
+  candidateDurationSeconds: number;
+  durationTargetSeconds: number;
+  scoringMode: ScoringMode;
+  baseDeterministicScore: number;
+  scoringModeScore: number;
+  rerankDelta: number;
+  compositeScore: number;
+  warnings: string[];
+  exportedFiles: ExportArtifacts;
+}
+
+export interface ExportResult {
+  ok: boolean;
+  message: string;
+  outputDirectory: string;
+  artifacts: ExportArtifacts;
+  metadata: ExportMetadata;
+}
+
+export interface CommitCandidateResult {
+  ok: boolean;
+  message: string;
 }

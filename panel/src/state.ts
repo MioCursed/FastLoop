@@ -1,6 +1,16 @@
-import type { AnalysisResult, HostCapabilities, LibraryTrack, QueueItem, ScoringMode } from "@fastloop/shared";
+import type {
+  AnalysisResult,
+  ExportResult,
+  HostCapabilities,
+  LibraryTrack,
+  PreviewMode,
+  PreviewResult,
+  QueueItem,
+  ScoringMode
+} from "@fastloop/shared";
 
 export type AnalysisStatus = "idle" | "loading" | "success" | "error";
+export type ActionStatus = "idle" | "running" | "success" | "error";
 
 export interface PanelState {
   host: HostCapabilities | null;
@@ -12,6 +22,12 @@ export interface PanelState {
   analysisStatus: AnalysisStatus;
   durationTargetSeconds: number;
   scoringMode: ScoringMode;
+  previewMode: PreviewMode;
+  previewStatus: ActionStatus;
+  exportStatus: ActionStatus;
+  commitStatus: ActionStatus;
+  lastPreview: PreviewResult | null;
+  lastExport: ExportResult | null;
   statusMessage: string | null;
   errorMessage: string | null;
 }
@@ -42,6 +58,12 @@ export function createInitialState(): PanelState {
     analysisStatus: "idle",
     durationTargetSeconds: 8,
     scoringMode: "duration-priority",
+    previewMode: "repeat",
+    previewStatus: "idle",
+    exportStatus: "idle",
+    commitStatus: "idle",
+    lastPreview: null,
+    lastExport: null,
     statusMessage: "Ready for analysis.",
     errorMessage: null
   };

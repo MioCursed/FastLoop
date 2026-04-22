@@ -24,6 +24,12 @@ export function createInitialState() {
         analysisStatus: "idle",
         durationTargetSeconds: 8,
         scoringMode: "duration-priority",
+        previewMode: "repeat",
+        previewStatus: "idle",
+        exportStatus: "idle",
+        commitStatus: "idle",
+        lastPreview: null,
+        lastExport: null,
         statusMessage: "Ready for analysis.",
         errorMessage: null
     };

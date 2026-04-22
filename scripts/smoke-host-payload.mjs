@@ -37,6 +37,19 @@ async function runPremiereValidation() {
   if (result !== "ok" || createdMarkers.length !== 2) {
     throw new Error("Premiere host payload validation failed.");
   }
+  const commitResult = context.$._fastloopPremiere.commitCandidate(
+    JSON.stringify({
+      trackId: "fixture-track",
+      candidate: {
+        id: "candidate-02",
+        startSeconds: 4.5,
+        endSeconds: 12.5
+      }
+    })
+  );
+  if (commitResult !== "ok" || createdMarkers.length !== 5) {
+    throw new Error("Premiere host commit validation failed.");
+  }
   return createdMarkers;
 }
 
@@ -76,6 +89,19 @@ async function runAfterEffectsValidation() {
   if (result !== "ok" || placedMarkers.length !== 2) {
     throw new Error("After Effects host payload validation failed.");
   }
+  const commitResult = context.$._fastloopAfterEffects.commitCandidate(
+    JSON.stringify({
+      trackId: "fixture-track",
+      candidate: {
+        id: "candidate-02",
+        startSeconds: 4.5,
+        endSeconds: 12.5
+      }
+    })
+  );
+  if (commitResult !== "ok" || placedMarkers.length !== 5) {
+    throw new Error("After Effects host commit validation failed.");
+  }
   return placedMarkers;
 }
 
@@ -90,7 +116,9 @@ console.log(
       premiereMarkers: premiereMarkers.length,
       afterEffectsMarkers: afterEffectsMarkers.length,
       firstPremiereMarkerTime: premiereMarkers[0].time,
-      firstAfterEffectsMarkerTime: afterEffectsMarkers[0].time
+      firstAfterEffectsMarkerTime: afterEffectsMarkers[0].time,
+      committedPremiereMarkerTime: premiereMarkers[4].time,
+      committedAfterEffectsMarkerTime: afterEffectsMarkers[4].time
     },
     null,
     2

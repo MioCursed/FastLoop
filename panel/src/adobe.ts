@@ -1,5 +1,11 @@
 import type { AdobeHostKind, HostCapabilities, PanelBridge } from "@fastloop/shared";
-import type { AnalyzeTrackRequest, ExportPlanRequest, PlaceMarkersRequest } from "@fastloop/shared";
+import type {
+  AnalyzeTrackRequest,
+  CommitCandidateRequest,
+  ExportPlanRequest,
+  PlaceMarkersRequest,
+  PreviewCandidateRequest
+} from "@fastloop/shared";
 
 declare global {
   interface Window {
@@ -119,6 +125,23 @@ function runEngineAnalysis(runtime: DesktopRuntime, request: AnalyzeTrackRequest
   return JSON.parse(stdout);
 }
 
+function runEngineRenderCommand(
+  runtime: DesktopRuntime,
+  command: "preview" | "export",
+  args: string[]
+) {
+  const stdout = runtime.execFileSync(
+    runtime.pythonBin,
+    ["-m", "fastloop_engine.render_cli", command, ...args],
+    {
+      cwd: runtime.cwd,
+      encoding: "utf8"
+    }
+  );
+
+  return JSON.parse(stdout);
+}
+
 function createAdobeBridge(): PanelBridge {
   const host = detectHostKind();
   const runtime = getDesktopRuntime();
@@ -162,12 +185,64 @@ function createAdobeBridge(): PanelBridge {
       const result = await evalHost(script);
       return { ok: result === "ok", message: result };
     },
+    async previewCandidate(request: PreviewCandidateRequest) {
+      if (!runtime) {
+        throw new Error("Preview runtime unavailable. Use CEP with Node enabled or the mock bridge.");
+      }
+
+      return runEngineRenderCommand(runtime, "preview", [
+        request.sourcePath,
+        "--track-id",
+        request.trackId,
+        "--candidate-json",
+        JSON.stringify(request.candidate),
+        "--preview-mode",
+        request.previewMode
+      ]);
+    },
+    async exportCandidate(request: ExportPlanRequest) {
+      if (!runtime) {
+        throw new Error("Export runtime unavailable. Use CEP with Node enabled or the mock bridge.");
+      }
+
+      return runEngineRenderCommand(runtime, "export", [
+        request.sourcePath,
+        "--track-id",
+        request.trackId,
+        "--candidate-json",
+        JSON.stringify(request.candidate),
+        "--duration-target",
+        String(request.durationTargetSeconds),
+        "--scoring-mode",
+        request.scoringMode,
+        "--warnings-json",
+        JSON.stringify(request.warnings)
+      ]);
+    },
     async buildExportPlan(request: ExportPlanRequest) {
+      if (runtime) {
+        const result = await this.exportCandidate(request);
+        return { ok: result.ok, artifacts: Object.values(result.artifacts) };
+      }
+
       const mockBridge = window.__FASTLOOP_BRIDGE__;
       if (!mockBridge) {
         return { ok: false, artifacts: [] };
       }
       return mockBridge.buildExportPlan(request);
+    },
+    async commitCandidate(request: CommitCandidateRequest) {
+      if (host !== "premiere" && host !== "aftereffects") {
+        return { ok: false, message: "Host bridge unavailable for commit." };
+      }
+
+      const payload = JSON.stringify(request).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+      const script =
+        host === "premiere"
+          ? "$._fastloopPremiere.commitCandidate('" + payload + "')"
+          : "$._fastloopAfterEffects.commitCandidate('" + payload + "')";
+      const result = await evalHost(script);
+      return { ok: result === "ok", message: result };
     },
     async getQueue() {
       const mockBridge = window.__FASTLOOP_BRIDGE__;

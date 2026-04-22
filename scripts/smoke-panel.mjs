@@ -22,8 +22,20 @@ global.HTMLElement = window.HTMLElement;
 global.Node = window.Node;
 global.Event = window.Event;
 global.MouseEvent = window.MouseEvent;
+global.HTMLMediaElement = window.HTMLMediaElement;
+
+if (window.HTMLMediaElement) {
+  window.HTMLMediaElement.prototype.play = function () {
+    this.dataset.played = "true";
+    return Promise.resolve();
+  };
+  window.HTMLMediaElement.prototype.pause = function () {};
+}
 
 let lastMarkerRequest = null;
+let lastCommitRequest = null;
+let lastPreviewResult = null;
+let lastExportResult = null;
 
 window.__FASTLOOP_BRIDGE__ = {
   async getHostCapabilities() {
@@ -61,8 +73,63 @@ window.__FASTLOOP_BRIDGE__ = {
     lastMarkerRequest = request;
     return { ok: true, message: `Smoke markers accepted for ${request.candidate.id}.` };
   },
-  async buildExportPlan() {
-    return { ok: true, artifacts: [] };
+  async previewCandidate(request) {
+    const stdout = execFileSync(
+      "python",
+      [
+        "-m",
+        "fastloop_engine.render_cli",
+        "preview",
+        request.sourcePath,
+        "--track-id",
+        request.trackId,
+        "--candidate-json",
+        JSON.stringify(request.candidate),
+        "--preview-mode",
+        request.previewMode
+      ],
+      {
+        cwd: workspaceRoot,
+        encoding: "utf8"
+      }
+    );
+    lastPreviewResult = JSON.parse(stdout);
+    return lastPreviewResult;
+  },
+  async exportCandidate(request) {
+    const stdout = execFileSync(
+      "python",
+      [
+        "-m",
+        "fastloop_engine.render_cli",
+        "export",
+        request.sourcePath,
+        "--track-id",
+        request.trackId,
+        "--candidate-json",
+        JSON.stringify(request.candidate),
+        "--duration-target",
+        String(request.durationTargetSeconds),
+        "--scoring-mode",
+        request.scoringMode,
+        "--warnings-json",
+        JSON.stringify(request.warnings)
+      ],
+      {
+        cwd: workspaceRoot,
+        encoding: "utf8"
+      }
+    );
+    lastExportResult = JSON.parse(stdout);
+    return lastExportResult;
+  },
+  async buildExportPlan(request) {
+    const result = await this.exportCandidate(request);
+    return { ok: result.ok, artifacts: Object.values(result.artifacts) };
+  },
+  async commitCandidate(request) {
+    lastCommitRequest = request;
+    return { ok: true, message: `Smoke commit accepted for ${request.candidate.id}.` };
   },
   async getQueue() {
     return [];
@@ -97,6 +164,21 @@ if (candidateRows.length < 2) {
 candidateRows[1].dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
 await new Promise((resolve) => setTimeout(resolve, 0));
 
+window.document.querySelector("#preview-button").dispatchEvent(
+  new window.MouseEvent("click", { bubbles: true })
+);
+await new Promise((resolve) => setTimeout(resolve, 0));
+
+window.document.querySelector("#export-button").dispatchEvent(
+  new window.MouseEvent("click", { bubbles: true })
+);
+await new Promise((resolve) => setTimeout(resolve, 0));
+
+window.document.querySelector("#commit-button").dispatchEvent(
+  new window.MouseEvent("click", { bubbles: true })
+);
+await new Promise((resolve) => setTimeout(resolve, 0));
+
 window.document.querySelector("#place-markers-button").dispatchEvent(
   new window.MouseEvent("click", { bubbles: true })
 );
@@ -111,8 +193,19 @@ const targetText = [...window.document.querySelectorAll(".metric-grid span")]
 const modeText = [...window.document.querySelectorAll(".metric-grid span")]
   .find((node) => node.textContent === "Mode")
   ?.nextElementSibling?.textContent;
+const previewAudio = window.document.querySelector("#preview-audio");
 
-if (!bpmText || !selectedCandidate || !lastMarkerRequest || targetText !== "30s" || modeText !== "duration-priority") {
+if (
+  !bpmText ||
+  !selectedCandidate ||
+  !lastMarkerRequest ||
+  !lastCommitRequest ||
+  !lastPreviewResult ||
+  !lastExportResult ||
+  !previewAudio ||
+  targetText !== "30s" ||
+  modeText !== "duration-priority"
+) {
   throw new Error("Panel smoke validation failed: render or payload flow is incomplete.");
 }
 
@@ -123,6 +216,9 @@ console.log(
       renderedCandidates: candidateRows.length,
       selectedCandidateId: lastMarkerRequest.candidate.id,
       markerMessage: statusLine.trim(),
+      previewPath: lastPreviewResult.previewFilePath,
+      exportMetadataPath: lastExportResult.artifacts.metadataPath,
+      committedCandidateId: lastCommitRequest.candidate.id,
       targetText,
       modeText
     },

@@ -1,7 +1,13 @@
 import { DURATION_PRESETS, SCORING_MODE_PRESETS } from "@fastloop/shared";
-import type { AnalysisResult, LoopCandidate, PanelBridge, ScoringMode } from "@fastloop/shared";
+import type {
+  AnalysisResult,
+  LoopCandidate,
+  PanelBridge,
+  PreviewMode,
+  ScoringMode
+} from "@fastloop/shared";
 import { getBridge } from "./adobe.js";
-import { createInitialState, type PanelState } from "./state.js";
+import { createInitialState, type ActionStatus, type PanelState } from "./state.js";
 
 interface MountOptions {
   bridge?: PanelBridge;
@@ -29,6 +35,24 @@ function formatSigned(value: number | null | undefined): string {
     return "--";
   }
   return `${value >= 0 ? "+" : ""}${value.toFixed(2)}`;
+}
+
+function formatActionStatus(status: ActionStatus): string {
+  switch (status) {
+    case "running":
+      return "Running";
+    case "success":
+      return "Ready";
+    case "error":
+      return "Failed";
+    default:
+      return "Idle";
+  }
+}
+
+function toFileUrl(filePath: string): string {
+  const normalized = filePath.replace(/\\/g, "/");
+  return encodeURI(normalized.startsWith("/") ? `file://${normalized}` : `file:///${normalized}`);
 }
 
 function selectedTrack(state: PanelState) {
@@ -158,11 +182,68 @@ function renderBreakdown(candidate: LoopCandidate | null): string {
     .join("");
 }
 
+function renderExecutionBlock(state: PanelState): string {
+  const preview = state.lastPreview;
+  const exportResult = state.lastExport;
+  const audioMarkup = preview
+    ? `
+        <audio id="preview-audio" class="preview-audio" controls src="${escapeHtml(toFileUrl(preview.previewFilePath))}"></audio>
+        <div class="artifact-path">${escapeHtml(preview.previewFilePath)}</div>
+      `
+    : '<div class="empty-row">No preview rendered yet.</div>';
+
+  const exportMarkup = exportResult
+    ? `
+        <div class="execution-summary">
+          <span>Output</span>
+          <strong>${escapeHtml(exportResult.outputDirectory)}</strong>
+        </div>
+        <div class="artifact-list">
+          <div class="artifact-path">${escapeHtml(exportResult.artifacts.introPath)}</div>
+          <div class="artifact-path">${escapeHtml(exportResult.artifacts.loopPath)}</div>
+          <div class="artifact-path">${escapeHtml(exportResult.artifacts.outroPath)}</div>
+          <div class="artifact-path">${escapeHtml(exportResult.artifacts.extendedMixPath)}</div>
+          <div class="artifact-path">${escapeHtml(exportResult.artifacts.metadataPath)}</div>
+        </div>
+      `
+    : '<div class="empty-row">No exports generated yet.</div>';
+
+  return `
+    <div class="execution-grid">
+      <div class="execution-row">
+        <span>Preview</span>
+        <strong class="status-pill ${state.previewStatus}">${formatActionStatus(state.previewStatus)}</strong>
+      </div>
+      <div class="execution-row">
+        <span>Export</span>
+        <strong class="status-pill ${state.exportStatus}">${formatActionStatus(state.exportStatus)}</strong>
+      </div>
+      <div class="execution-row">
+        <span>Commit</span>
+        <strong class="status-pill ${state.commitStatus}">${formatActionStatus(state.commitStatus)}</strong>
+      </div>
+      <div class="execution-row">
+        <span>Preview Mode</span>
+        <strong>${state.previewMode}</strong>
+      </div>
+    </div>
+    <div class="execution-panel">
+      <div class="block-subtitle">Preview Output</div>
+      ${audioMarkup}
+    </div>
+    <div class="execution-panel">
+      <div class="block-subtitle">Export Output</div>
+      ${exportMarkup}
+    </div>
+  `;
+}
+
 function render(state: PanelState): string {
   const track = selectedTrack(state);
   const candidate = selectedCandidate(state);
   const analysis = state.analysis;
   const duration = analysis?.durationSeconds ?? track?.durationSeconds ?? 0;
+  const canActOnCandidate = Boolean(candidate && track);
 
   return `
     <div class="shell">
@@ -174,9 +255,10 @@ function render(state: PanelState): string {
         <div class="toolbar">
           <button id="focus-path-button">Track Path</button>
           <button id="analyze-button" ${state.analysisStatus === "loading" ? "disabled" : ""}>Analyze Track</button>
-          <button id="place-markers-button" ${candidate ? "" : "disabled"}>Place Markers</button>
-          <button disabled>Preview Seamless Loop</button>
-          <button disabled>Export</button>
+          <button id="preview-button" ${canActOnCandidate && state.previewStatus !== "running" ? "" : "disabled"}>Preview Seamless Loop</button>
+          <button id="export-button" ${canActOnCandidate && state.exportStatus !== "running" ? "" : "disabled"}>Export</button>
+          <button id="commit-button" ${canActOnCandidate && state.commitStatus !== "running" ? "" : "disabled"}>Commit Candidate</button>
+          <button id="place-markers-button" ${canActOnCandidate ? "" : "disabled"}>Place Markers</button>
           <button disabled>Settings</button>
         </div>
       </header>
@@ -208,7 +290,7 @@ function render(state: PanelState): string {
               <span>Selected Track Source</span>
               <input id="track-path-input" type="text" value="${escapeHtml(track?.sourcePath ?? "")}" placeholder="Paste a local audio path" />
             </label>
-            <div class="status-line ${state.analysisStatus}">
+            <div class="status-line ${state.analysisStatus === "loading" ? "loading" : state.errorMessage ? "error" : "success"}">
               <span>${escapeHtml(state.errorMessage ?? state.statusMessage ?? "Ready.")}</span>
             </div>
             ${renderWarnings(analysis?.warnings ?? [])}
@@ -276,7 +358,11 @@ function render(state: PanelState): string {
                   value="${escapeHtml(String(state.durationTargetSeconds))}"
                 />
               </label>
-              <span class="muted">Mode-aware ranking reruns against the real engine after analysis.</span>
+              <div class="segmented">
+                <button class="${state.previewMode === "cycle" ? "active" : ""}" data-preview-mode="cycle">1 Cycle</button>
+                <button class="${state.previewMode === "repeat" ? "active" : ""}" data-preview-mode="repeat">Looping</button>
+              </div>
+              <span class="muted">Preview renders a deterministic local file and attempts in-panel playback.</span>
             </div>
           </section>
           <section class="candidate-card">
@@ -334,6 +420,10 @@ function render(state: PanelState): string {
             </div>
           </section>
           <section class="panel-block">
+            <div class="block-title">Execution</div>
+            ${renderExecutionBlock(state)}
+          </section>
+          <section class="panel-block">
             <div class="block-title">Score Breakdown</div>
             <div class="breakdown-grid">${renderBreakdown(candidate)}</div>
           </section>
@@ -372,6 +462,8 @@ export async function mountApp(root: HTMLElement, options?: MountOptions): Promi
     queue: baseState.queue.map((item) => ({ ...item }))
   };
 
+  let previewAudio: HTMLAudioElement | null = null;
+
   async function refreshCapabilities(): Promise<void> {
     state.host = await bridge.getHostCapabilities();
     state.queue = await bridge.getQueue();
@@ -382,7 +474,10 @@ export async function mountApp(root: HTMLElement, options?: MountOptions): Promi
     state.errorMessage = errorMessage;
   }
 
-  function syncQueue(status: PanelState["queue"][number]["status"]): void {
+  function syncQueue(
+    status: PanelState["queue"][number]["status"],
+    exportState?: PanelState["queue"][number]["exportState"]
+  ): void {
     const track = selectedTrack(state);
     if (!track) {
       return;
@@ -394,7 +489,7 @@ export async function mountApp(root: HTMLElement, options?: MountOptions): Promi
       status,
       candidateCount: state.analysis?.candidates.length ?? existing?.candidateCount ?? 0,
       durationTargetSeconds: state.durationTargetSeconds,
-      exportState: existing?.exportState ?? "none"
+      exportState: exportState ?? existing?.exportState ?? "none"
     };
 
     state.queue = existing
@@ -415,9 +510,35 @@ export async function mountApp(root: HTMLElement, options?: MountOptions): Promi
     }
   }
 
+  function stopPreviewPlayback(): void {
+    if (!previewAudio) {
+      return;
+    }
+    previewAudio.pause();
+    previewAudio.src = "";
+    previewAudio = null;
+  }
+
   function renderApp(): void {
     root.innerHTML = render(state);
     bindEvents();
+  }
+
+  async function startPreviewPlayback(): Promise<void> {
+    const audioElement = root.querySelector<HTMLAudioElement>("#preview-audio");
+    if (!audioElement) {
+      return;
+    }
+
+    stopPreviewPlayback();
+    previewAudio = audioElement;
+
+    try {
+      await previewAudio.play();
+    } catch {
+      setStatus("Preview rendered. Use the inline audio controls if autoplay is blocked.", null);
+      renderApp();
+    }
   }
 
   async function analyzeSelectedTrack(): Promise<void> {
@@ -443,6 +564,11 @@ export async function mountApp(root: HTMLElement, options?: MountOptions): Promi
       });
       state.analysis = result;
       state.selectedCandidateId = result.candidates[0]?.id ?? null;
+      state.lastPreview = null;
+      state.lastExport = null;
+      state.previewStatus = "idle";
+      state.exportStatus = "idle";
+      state.commitStatus = "idle";
       track.durationSeconds = result.durationSeconds;
       track.cacheState = "ready";
       state.analysisStatus = "success";
@@ -450,11 +576,11 @@ export async function mountApp(root: HTMLElement, options?: MountOptions): Promi
         `Analyzed ${track.name}: ${result.candidates.length} candidates at ${result.bpm.toFixed(2)} BPM.`,
         null
       );
-      syncQueue("ready");
+      syncQueue("ready", "none");
     } catch (error) {
       state.analysisStatus = "error";
       setStatus(null, error instanceof Error ? error.message : "Unknown analysis failure.");
-      syncQueue("error");
+      syncQueue("error", "failed");
     }
 
     renderApp();
@@ -474,6 +600,112 @@ export async function mountApp(root: HTMLElement, options?: MountOptions): Promi
       candidate
     });
     setStatus(response.message, response.ok ? null : response.message);
+    renderApp();
+  }
+
+  async function previewSelectedCandidate(): Promise<void> {
+    const track = selectedTrack(state);
+    const candidate = selectedCandidate(state);
+    if (!track || !candidate) {
+      state.previewStatus = "error";
+      setStatus(null, "Select a candidate before rendering preview.");
+      renderApp();
+      return;
+    }
+
+    state.previewStatus = "running";
+    setStatus(`Preparing ${state.previewMode} preview for ${candidate.id}...`, null);
+    renderApp();
+
+    try {
+      const response = await bridge.previewCandidate({
+        trackId: track.id,
+        sourcePath: track.sourcePath,
+        candidate,
+        previewMode: state.previewMode
+      });
+      state.lastPreview = response;
+      state.previewStatus = response.ok ? "success" : "error";
+      setStatus(response.message, response.ok ? null : response.message);
+      renderApp();
+      if (response.ok) {
+        await startPreviewPlayback();
+      }
+    } catch (error) {
+      state.previewStatus = "error";
+      setStatus(null, error instanceof Error ? error.message : "Preview render failed.");
+      renderApp();
+    }
+  }
+
+  async function exportSelectedCandidate(): Promise<void> {
+    const track = selectedTrack(state);
+    const candidate = selectedCandidate(state);
+    const analysis = state.analysis;
+    if (!track || !candidate || !analysis) {
+      state.exportStatus = "error";
+      setStatus(null, "Analyze a track and select a candidate before exporting.");
+      renderApp();
+      return;
+    }
+
+    state.exportStatus = "running";
+    setStatus(`Exporting intro/loop/outro/full bed for ${candidate.id}...`, null);
+    syncQueue("exporting", "planned");
+    renderApp();
+
+    try {
+      const response = await bridge.exportCandidate({
+        trackId: track.id,
+        sourcePath: track.sourcePath,
+        candidate,
+        scoringMode: analysis.scoringMode,
+        warnings: analysis.warnings,
+        includeIntro: true,
+        includeLoop: true,
+        includeOutro: true,
+        includeExtendedMix: true,
+        durationTargetSeconds: state.durationTargetSeconds
+      });
+      state.lastExport = response;
+      state.exportStatus = response.ok ? "success" : "error";
+      setStatus(response.message, response.ok ? null : response.message);
+      syncQueue("ready", response.ok ? "done" : "failed");
+    } catch (error) {
+      state.exportStatus = "error";
+      setStatus(null, error instanceof Error ? error.message : "Export failed.");
+      syncQueue("error", "failed");
+    }
+
+    renderApp();
+  }
+
+  async function commitSelectedCandidate(): Promise<void> {
+    const track = selectedTrack(state);
+    const candidate = selectedCandidate(state);
+    if (!track || !candidate) {
+      state.commitStatus = "error";
+      setStatus(null, "Select a candidate before committing to the Adobe host.");
+      renderApp();
+      return;
+    }
+
+    state.commitStatus = "running";
+    setStatus(`Committing ${candidate.id} to the host...`, null);
+    renderApp();
+
+    try {
+      const response = await bridge.commitCandidate({
+        trackId: track.id,
+        candidate
+      });
+      state.commitStatus = response.ok ? "success" : "error";
+      setStatus(response.message, response.ok ? null : response.message);
+    } catch (error) {
+      state.commitStatus = "error";
+      setStatus(null, error instanceof Error ? error.message : "Commit failed.");
+    }
+
     renderApp();
   }
 
@@ -506,6 +738,16 @@ export async function mountApp(root: HTMLElement, options?: MountOptions): Promi
     }
   }
 
+  function updatePreviewMode(nextMode: PreviewMode): void {
+    if (state.previewMode === nextMode) {
+      return;
+    }
+
+    state.previewMode = nextMode;
+    setStatus(`Preview mode set to ${nextMode}.`, null);
+    renderApp();
+  }
+
   function bindEvents(): void {
     root.querySelector("#focus-path-button")?.addEventListener("click", () => {
       root.querySelector<HTMLInputElement>("#track-path-input")?.focus();
@@ -513,6 +755,18 @@ export async function mountApp(root: HTMLElement, options?: MountOptions): Promi
 
     root.querySelector("#analyze-button")?.addEventListener("click", () => {
       void analyzeSelectedTrack();
+    });
+
+    root.querySelector("#preview-button")?.addEventListener("click", () => {
+      void previewSelectedCandidate();
+    });
+
+    root.querySelector("#export-button")?.addEventListener("click", () => {
+      void exportSelectedCandidate();
+    });
+
+    root.querySelector("#commit-button")?.addEventListener("click", () => {
+      void commitSelectedCandidate();
     });
 
     root.querySelector("#place-markers-button")?.addEventListener("click", () => {
@@ -525,10 +779,16 @@ export async function mountApp(root: HTMLElement, options?: MountOptions): Promi
 
     for (const button of root.querySelectorAll<HTMLButtonElement>("[data-track-id]")) {
       button.addEventListener("click", () => {
+        stopPreviewPlayback();
         state.selectedTrackId = button.dataset.trackId ?? null;
         if (state.analysis?.trackId !== state.selectedTrackId) {
           state.analysis = null;
           state.selectedCandidateId = null;
+          state.lastPreview = null;
+          state.lastExport = null;
+          state.previewStatus = "idle";
+          state.exportStatus = "idle";
+          state.commitStatus = "idle";
         } else {
           state.selectedCandidateId = state.analysis.candidates[0]?.id ?? null;
         }
@@ -561,9 +821,21 @@ export async function mountApp(root: HTMLElement, options?: MountOptions): Promi
       });
     }
 
+    for (const button of root.querySelectorAll<HTMLButtonElement>("[data-preview-mode]")) {
+      button.addEventListener("click", () => {
+        const nextMode = button.dataset.previewMode as PreviewMode | undefined;
+        if (nextMode) {
+          updatePreviewMode(nextMode);
+        }
+      });
+    }
+
     for (const button of root.querySelectorAll<HTMLButtonElement>("[data-candidate-id]")) {
       button.addEventListener("click", () => {
+        stopPreviewPlayback();
         state.selectedCandidateId = button.dataset.candidateId ?? null;
+        state.lastPreview = null;
+        state.previewStatus = "idle";
         renderApp();
       });
     }

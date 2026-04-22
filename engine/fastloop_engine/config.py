@@ -7,7 +7,10 @@ class EngineConfig:
     min_loop_seconds: float = 2.0
     max_loop_seconds: float = 60.0
     cache_directory: str = ".fastloop-cache"
+    output_directory: str = ".fastloop-output"
     waveform_points: int = 512
     boundary_window_seconds: float = 0.35
+    preview_crossfade_seconds: float = 0.035
+    preview_repeat_cycles: int = 4
     beats_per_bar: int = 4
     max_candidates: int = 24

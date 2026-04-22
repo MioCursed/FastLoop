@@ -10,3 +10,4 @@ coverage/
 *.log
 engine/.mypy_cache/
 engine/.pytest_cache/
+.fastloop-output/

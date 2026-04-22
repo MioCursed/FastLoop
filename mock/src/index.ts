@@ -25,16 +25,56 @@ window.__FASTLOOP_BRIDGE__ = {
     window.__FASTLOOP_LAST_MARKER_REQUEST__ = request;
     return { ok: true, message: `Mock markers placed for ${request.trackId}.` };
   },
-  async buildExportPlan(request) {
+  async previewCandidate(request) {
     return {
       ok: true,
-      artifacts: [
-        `${request.trackId}.intro.wav`,
-        `${request.trackId}.loop.wav`,
-        `${request.trackId}.outro.wav`,
-        `${request.trackId}.metadata.json`
-      ]
+      message: `Mock preview ready for ${request.candidate.id}.`,
+      candidateId: request.candidate.id,
+      previewMode: request.previewMode,
+      loopCycles: request.previewMode === "cycle" ? 1 : 4,
+      previewFilePath: `${request.sourcePath}`
     };
+  },
+  async exportCandidate(request) {
+    const outputDirectory = `c:/mock-fastloop/${request.trackId}/${request.candidate.id}`;
+    const artifacts = {
+      introPath: `${outputDirectory}/${request.candidate.id}.intro.wav`,
+      loopPath: `${outputDirectory}/${request.candidate.id}.loop.wav`,
+      outroPath: `${outputDirectory}/${request.candidate.id}.outro.wav`,
+      extendedMixPath: `${outputDirectory}/${request.candidate.id}.extended.wav`,
+      metadataPath: `${outputDirectory}/${request.candidate.id}.metadata.json`
+    };
+    return {
+      ok: true,
+      message: `Mock export ready for ${request.candidate.id}.`,
+      outputDirectory,
+      artifacts,
+      metadata: {
+        version: "1.0.0",
+        createdAt: new Date().toISOString(),
+        trackId: request.trackId,
+        sourcePath: request.sourcePath,
+        candidateId: request.candidate.id,
+        candidateStartSeconds: request.candidate.startSeconds,
+        candidateEndSeconds: request.candidate.endSeconds,
+        candidateDurationSeconds: request.candidate.durationSeconds,
+        durationTargetSeconds: request.durationTargetSeconds,
+        scoringMode: request.scoringMode,
+        baseDeterministicScore: request.candidate.baseDeterministicScore,
+        scoringModeScore: request.candidate.scoringModeScore,
+        rerankDelta: request.candidate.rerankDelta,
+        compositeScore: request.candidate.compositeScore,
+        warnings: request.warnings,
+        exportedFiles: artifacts
+      }
+    };
+  },
+  async buildExportPlan(request) {
+    const result = await this.exportCandidate(request);
+    return { ok: result.ok, artifacts: Object.values(result.artifacts) };
+  },
+  async commitCandidate(request) {
+    return { ok: true, message: `Mock commit accepted for ${request.candidate.id}.` };
   },
   async getQueue() {
     return [
