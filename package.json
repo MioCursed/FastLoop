@@ -19,6 +19,7 @@
     "build:mock:smoke": "tsc -p mock/tsconfig.smoke.json",
     "dev:panel": "npm run dev --workspace panel",
     "dev:mock": "npm run dev --workspace mock",
+    "cep:validate": "node ./scripts/validate-cep-bundle.mjs",
     "docs:validate": "node ./scripts/validate-docs.mjs",
     "release:build": "npm run build:shared && npm run build:panel && npm run build:engine-runtime && npm run release:package",
     "release:package": "node ./scripts/build-release.mjs",
@@ -28,6 +29,7 @@
     "smoke:panel": "npm run build:panel:smoke && node ./scripts/smoke-panel.mjs",
     "smoke:panel:packaged": "npm run build:panel:smoke && node ./scripts/smoke-panel-packaged.mjs",
     "smoke:shared": "node ./scripts/smoke-shared.mjs",
+    "smoke:install": "node ./scripts/smoke-install.mjs",
     "smoke:mock": "npm run build:panel:smoke && npm run build:mock:smoke && node ./scripts/smoke-mock.mjs",
     "smoke:host": "node ./scripts/smoke-host-payload.mjs"
   },

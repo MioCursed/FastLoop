@@ -15,6 +15,7 @@ Current packaging output includes:
 - packaged Windows engine runtime
 - checksums, release notes, manifest, and install documents
 - `release-notes-template.md` as the source scaffold for generated prerelease notes
+- `TROUBLESHOOTING.md` plus `Test-FastLoop-HostReadiness.ps1` for “installed but not visible” CEP diagnostics
 
 Recommended release flow:
 

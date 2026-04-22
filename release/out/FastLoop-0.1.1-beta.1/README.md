@@ -40,7 +40,8 @@ Short version:
 2. Download `FastLoop-Windows-x64-Setup.exe`.
 3. Run the installer.
 4. Open Premiere Pro or After Effects.
-5. Launch the `FastLoop` panel and use it.
+5. Open `Window > Extensions (Legacy) > FastLoop` on newer Adobe builds, or `Window > Extensions > FastLoop` on older builds.
+6. Use the panel.
 
 If you prefer not to run the installer, download `FastLoop-Windows-x64.zip`, extract it, and run the included install helper.
 
@@ -49,6 +50,7 @@ If you prefer not to run the installer, download `FastLoop-Windows-x64.zip`, ext
 - CEP extension bundle for Premiere Pro and After Effects
 - packaged Windows engine runtime
 - install helper scripts for portable installs
+- host-readiness helper for CEP visibility diagnostics
 - release notes and checksums
 
 ## Developer Setup
@@ -106,3 +108,4 @@ npm run release:validate
 - The rerank layer is intentionally lightweight and local; it does not replace deterministic scoring.
 - GitHub Releases is the main end-user installation channel.
 - Current assets are installer-ready and release-ready, but still unsigned prerelease assets until signing is added.
+- The unsigned prerelease install path now prepares `PlayerDebugMode` for CEP 11 and CEP 12 under the current user profile.

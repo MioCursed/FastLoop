@@ -7,6 +7,7 @@ const requiredFiles = [
   "README.md",
   "INSTALL.md",
   "CHANGELOG.md",
+  "release/TROUBLESHOOTING.md",
   "release/README.md",
   "release/CHECKLIST.md",
   "release/release-notes-template.md",
@@ -33,6 +34,7 @@ const readmeExpectations = [
   "FastLoop-Windows-x64.zip",
   "installer",
   "INSTALL.md",
+  "Extensions (Legacy)",
   "Developer Setup"
 ];
 
@@ -42,6 +44,8 @@ const installExpectations = [
   "GitHub Releases",
   "FastLoop-Windows-x64-Setup.exe",
   "FastLoop-Windows-x64.zip",
+  "Extensions (Legacy)",
+  "PlayerDebugMode",
   "manual Python install",
   "fallback",
   "Developer Setup"

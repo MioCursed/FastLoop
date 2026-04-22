@@ -16,6 +16,8 @@ for (const filePath of [
   manifest.artifacts.releaseNotes,
   manifest.artifacts.installGuide,
   manifest.artifacts.changelog,
+  manifest.artifacts.troubleshootingGuide,
+  manifest.artifacts.hostReadinessHelper,
   manifest.artifacts.runtimeExecutable
 ]) {
   await access(filePath);
@@ -53,10 +55,13 @@ execFileSync(
 for (const filePath of [
   path.join(installerExtractRoot, "Install-FastLoop.ps1"),
   path.join(installerExtractRoot, "Install-FastLoop.cmd"),
+  path.join(installerExtractRoot, "FastLoop-CEPCommon.ps1"),
   path.join(installerExtractRoot, "FastLoop-Windows-x64.zip"),
   path.join(portableExtractRoot, "FastLoop", "CSXS", "manifest.xml"),
   path.join(portableExtractRoot, "Install-FastLoop.ps1"),
+  path.join(portableExtractRoot, "FastLoop-CEPCommon.ps1"),
   path.join(portableExtractRoot, "Install-FastLoop.cmd"),
+  path.join(portableExtractRoot, "Test-FastLoop-HostReadiness.ps1"),
   path.join(portableExtractRoot, "FastLoop", "engine-runtime", "windows-x64", "fastloop-engine-runtime", "fastloop-engine-runtime.exe")
 ]) {
   await access(filePath);
@@ -70,6 +75,44 @@ if (path.basename(manifest.artifacts.portableZip) !== "FastLoop-Windows-x64.zip"
   throw new Error("Portable zip asset name does not match the documented release asset name.");
 }
 
+const installSmokeRoot = path.join(validationRoot, "installed-fastloop", "FastLoop");
+const installLogRoot = path.join(validationRoot, "install-logs");
+const registryBasePath = `HKCU:\\Software\\FastLoop\\ReleaseValidation\\${version.replace(/[^A-Za-z0-9]/g, "_")}`;
+await mkdir(installLogRoot, { recursive: true });
+
+execFileSync(
+  "powershell",
+  [
+    "-NoProfile",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-File",
+    path.join(portableExtractRoot, "Install-FastLoop.ps1"),
+    "-BundleDirectory",
+    path.join(portableExtractRoot, "FastLoop"),
+    "-InstallRoot",
+    installSmokeRoot,
+    "-RegistryBasePath",
+    registryBasePath,
+    "-LogDirectory",
+    installLogRoot
+  ],
+  {
+    cwd: workspaceRoot,
+    stdio: "inherit"
+  }
+);
+
+for (const filePath of [
+  path.join(installSmokeRoot, "CSXS", "manifest.xml"),
+  path.join(installSmokeRoot, "dist", "index.html"),
+  path.join(installSmokeRoot, "install-verification.json"),
+  path.join(installLogRoot, "install-latest.json"),
+  path.join(installLogRoot, "install-latest.log")
+]) {
+  await access(filePath);
+}
+
 console.log(
   JSON.stringify(
     {
@@ -77,7 +120,8 @@ console.log(
       releaseRoot,
       installer: manifest.artifacts.installer,
       portableZip: manifest.artifacts.portableZip,
-      portableManifest: path.join(portableExtractRoot, "FastLoop", "CSXS", "manifest.xml")
+      portableManifest: path.join(portableExtractRoot, "FastLoop", "CSXS", "manifest.xml"),
+      installSmokeRoot
     },
     null,
     2

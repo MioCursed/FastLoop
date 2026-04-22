@@ -19,7 +19,7 @@ Downloads:
 2. Download `FastLoop-Windows-x64-Setup.exe`.
 3. Run the installer.
 4. Open Premiere Pro or After Effects.
-5. Launch the `FastLoop` panel.
+5. Open `Window > Extensions (Legacy) > FastLoop` on newer Adobe builds, or `Window > Extensions > FastLoop` on older builds.
 6. Choose audio, analyze, preview, export, and commit.
 
 ### Portable/Fallback Path
@@ -39,9 +39,28 @@ The zip package is a fallback path. The installer is the primary user-facing met
 ### Notes
 
 - the packaged Windows runtime is included, so the normal release path does not require a manual Python install
+- the current unsigned prerelease install path enables `PlayerDebugMode=1` for `CSXS.11` and `CSXS.12` under `HKEY_CURRENT_USER\Software\Adobe`
 - exported previews and renders go to the selected export destination when provided
 - if no output folder is chosen in the panel, FastLoop falls back to `.fastloop-output/`
 - the current installer and zip are usable prerelease assets
+
+### Installed But Not Visible
+
+If FastLoop installs but does not appear:
+
+1. Fully quit Premiere Pro or After Effects and reopen it.
+2. Check `Window > Extensions (Legacy) > FastLoop` first on newer Adobe builds.
+3. Run the packaged readiness helper:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Test-FastLoop-HostReadiness.ps1
+```
+
+4. Confirm `%AppData%\Adobe\CEP\extensions\FastLoop\CSXS\manifest.xml` exists.
+5. Confirm `PlayerDebugMode` is set to `1` under:
+   - `HKEY_CURRENT_USER\Software\Adobe\CSXS.11`
+   - `HKEY_CURRENT_USER\Software\Adobe\CSXS.12`
+6. If the panel is still missing, inspect Adobe CEP logs under `%LOCALAPPDATA%\Temp`.
 
 ### Advanced / Fallback CEP Path
 

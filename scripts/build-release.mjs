@@ -7,6 +7,7 @@ import path from "node:path";
 const workspaceRoot = process.cwd();
 const packageJson = JSON.parse(await readFile(path.join(workspaceRoot, "package.json"), "utf8"));
 const version = packageJson.version ?? "0.1.0";
+const cepManifestVersion = toCepManifestVersion(version);
 
 const releaseRoot = path.join(workspaceRoot, "release", "out", `FastLoop-${version}`);
 const portableRoot = path.join(releaseRoot, "FastLoop-Windows-x64");
@@ -34,12 +35,15 @@ const requiredSources = [
   path.join(workspaceRoot, "INSTALL.md"),
   path.join(workspaceRoot, "README.md"),
   path.join(workspaceRoot, "CHANGELOG.md"),
+  path.join(workspaceRoot, "release", "TROUBLESHOOTING.md"),
   path.join(workspaceRoot, "release", "README.md"),
   path.join(workspaceRoot, "release", "CHECKLIST.md"),
   path.join(workspaceRoot, "release", "release-notes-template.md"),
   path.join(workspaceRoot, "release", "SIGNING.md"),
+  path.join(templateRoot, "FastLoop-CEPCommon.ps1"),
   path.join(templateRoot, "Install-FastLoop.ps1"),
-  path.join(templateRoot, "Install-FastLoop.cmd")
+  path.join(templateRoot, "Install-FastLoop.cmd"),
+  path.join(templateRoot, "Test-FastLoop-HostReadiness.ps1")
 ];
 
 for (const source of requiredSources) {
@@ -67,6 +71,25 @@ function runPowerShell(command) {
 
 function renderPortableInstallScript(template, currentVersion) {
   return template.replaceAll("__FASTLOOP_VERSION__", currentVersion);
+}
+
+function toCepManifestVersion(currentVersion) {
+  const match = /^(\d+)\.(\d+)\.(\d+)(?:-[0-9A-Za-z-]+(?:\.(\d+))?)?/.exec(currentVersion);
+  if (!match) {
+    throw new Error(`Unsupported package version for CEP manifest normalization: ${currentVersion}`);
+  }
+
+  const [, major, minor, patch, prereleaseNumber] = match;
+  return prereleaseNumber ? `${major}.${minor}.${patch}.${prereleaseNumber}` : `${major}.${minor}.${patch}`;
+}
+
+function renderManifest(manifestSource, currentVersion) {
+  return manifestSource
+    .replace(/ExtensionBundleVersion="[^"]+"/, `ExtensionBundleVersion="${toCepManifestVersion(currentVersion)}"`)
+    .replace(
+      /<Extension Id="com\.fastloop\.panel\.main" Version="[^"]+"/,
+      `<Extension Id="com.fastloop.panel.main" Version="${toCepManifestVersion(currentVersion)}"`
+    );
 }
 
 function renderReleaseNotes(template, currentVersion) {
@@ -102,7 +125,7 @@ function createSedFile({
     "RebootMode=I",
     "InstallPrompt=",
     "DisplayLicense=",
-    "FinishMessage=FastLoop installation package is ready.",
+    "FinishMessage=FastLoop install command has completed. Review the console output and install log for verification details.",
     `TargetName=${targetName}`,
     `FriendlyName=${friendlyName}`,
     "AppLaunched=Install-FastLoop.cmd",
@@ -114,12 +137,14 @@ function createSedFile({
     'FILE0="FastLoop-Windows-x64.zip"',
     'FILE1="Install-FastLoop.ps1"',
     'FILE2="Install-FastLoop.cmd"',
+    'FILE3="FastLoop-CEPCommon.ps1"',
     "[SourceFiles]",
     `SourceFiles0=${sourceRoot}\\`,
     "[SourceFiles0]",
     "%FILE0%=",
     "%FILE1%=",
-    "%FILE2%="
+    "%FILE2%=",
+    "%FILE3%="
   ].join("\r\n");
 }
 
@@ -133,7 +158,9 @@ await rm(installerStageRoot, { recursive: true, force: true });
 await mkdir(extensionRoot, { recursive: true });
 await mkdir(installerStageRoot, { recursive: true });
 
-await cp(path.join(workspaceRoot, "panel", "CSXS"), path.join(extensionRoot, "CSXS"), { recursive: true });
+await mkdir(path.join(extensionRoot, "CSXS"), { recursive: true });
+const manifestTemplate = await readFile(path.join(workspaceRoot, "panel", "CSXS", "manifest.xml"), "utf8");
+await writeFile(path.join(extensionRoot, "CSXS", "manifest.xml"), renderManifest(manifestTemplate, version), "utf8");
 await cp(path.join(workspaceRoot, "panel", "dist"), path.join(extensionRoot, "dist"), { recursive: true });
 await cp(path.join(workspaceRoot, "panel", "host-index.jsx"), path.join(extensionRoot, "host-index.jsx"));
 await cp(path.join(workspaceRoot, "host-premiere"), path.join(extensionRoot, "host-premiere"), { recursive: true });
@@ -149,13 +176,23 @@ await writeFile(
   renderPortableInstallScript(portableInstallTemplate, version),
   "utf8"
 );
+const commonTemplate = await readFile(path.join(templateRoot, "FastLoop-CEPCommon.ps1"), "utf8");
+await writeFile(path.join(portableRoot, "FastLoop-CEPCommon.ps1"), commonTemplate, "utf8");
 await cp(path.join(templateRoot, "Install-FastLoop.cmd"), path.join(portableRoot, "Install-FastLoop.cmd"));
+const readinessTemplate = await readFile(path.join(templateRoot, "Test-FastLoop-HostReadiness.ps1"), "utf8");
+await writeFile(
+  path.join(portableRoot, "Test-FastLoop-HostReadiness.ps1"),
+  renderPortableInstallScript(readinessTemplate, version),
+  "utf8"
+);
 await cp(path.join(workspaceRoot, "INSTALL.md"), path.join(portableRoot, "INSTALL.md"));
 await cp(path.join(workspaceRoot, "CHANGELOG.md"), path.join(portableRoot, "CHANGELOG.md"));
+await cp(path.join(workspaceRoot, "release", "TROUBLESHOOTING.md"), path.join(portableRoot, "TROUBLESHOOTING.md"));
 
 await cp(path.join(workspaceRoot, "INSTALL.md"), path.join(releaseRoot, "INSTALL.md"));
 await cp(path.join(workspaceRoot, "README.md"), path.join(releaseRoot, "README.md"));
 await cp(path.join(workspaceRoot, "CHANGELOG.md"), path.join(releaseRoot, "CHANGELOG.md"));
+await cp(path.join(workspaceRoot, "release", "TROUBLESHOOTING.md"), path.join(releaseRoot, "TROUBLESHOOTING.md"));
 await cp(path.join(workspaceRoot, "release", "README.md"), path.join(releaseRoot, "RELEASE.md"));
 await cp(path.join(workspaceRoot, "release", "CHECKLIST.md"), path.join(releaseRoot, "CHECKLIST.md"));
 await cp(path.join(workspaceRoot, "release", "SIGNING.md"), path.join(releaseRoot, "SIGNING.md"));
@@ -165,6 +202,7 @@ runPowerShell(`Compress-Archive -Path '${portableRoot}\\*' -DestinationPath '${p
 
 await cp(path.join(portableRoot, "Install-FastLoop.ps1"), path.join(installerStageRoot, "Install-FastLoop.ps1"));
 await writeFile(path.join(installerStageRoot, "Install-FastLoop.cmd"), createInstallerBatch(), "utf8");
+await cp(path.join(portableRoot, "FastLoop-CEPCommon.ps1"), path.join(installerStageRoot, "FastLoop-CEPCommon.ps1"));
 await cp(portableZipPath, path.join(installerStageRoot, "FastLoop-Windows-x64.zip"));
 
 const sedPath = path.join(installerStageRoot, "FastLoop-Windows-x64-Setup.sed");
@@ -217,6 +255,7 @@ const portableZipStats = await stat(portableZipPath);
 const releaseManifest = {
   product: "FastLoop",
   version,
+  cepManifestVersion,
   channel: "prerelease",
   builtAt: new Date().toISOString(),
   primaryDownload: "FastLoop-Windows-x64-Setup.exe",
@@ -230,6 +269,7 @@ const releaseManifest = {
     releaseNotes: releaseNotesPath,
     installGuide: path.join(releaseRoot, "INSTALL.md"),
     changelog: path.join(releaseRoot, "CHANGELOG.md"),
+    troubleshootingGuide: path.join(releaseRoot, "TROUBLESHOOTING.md"),
     extensionBundle: extensionRoot,
     manifest: path.join(extensionRoot, "CSXS", "manifest.xml"),
     panelEntry: path.join(extensionRoot, "dist", "index.html"),
@@ -241,6 +281,7 @@ const releaseManifest = {
       "fastloop-engine-runtime",
       "fastloop-engine-runtime.exe"
     ),
+    hostReadinessHelper: path.join(portableRoot, "Test-FastLoop-HostReadiness.ps1"),
     assetList: assetListPath
   },
   signing: {
