@@ -1,5 +1,7 @@
 param(
   [string]$InstallRoot = "",
+  [ValidateSet("Auto", "CurrentUser", "AllUsers")]
+  [string]$InstallScope = "Auto",
   [string]$RegistryBasePath = "HKCU:\Software\Adobe",
   [string]$LogDirectory = ""
 )
@@ -21,8 +23,10 @@ $summaryPath = Join-Path $logRoot ("host-readiness-" + $stamp + ".json")
 $latestSummaryPath = Join-Path $logRoot "host-readiness-latest.json"
 
 try {
-  $targets = Get-FastLoopKnownCepRoots -InstallRoot $InstallRoot -InstallScope "CurrentUser"
+  $targetPlan = Get-FastLoopPreferredInstallTargets -InstallRoot $InstallRoot -InstallScope $InstallScope
+  $targets = @(@($targetPlan.PrimaryTargets) + @($targetPlan.SecondaryTargets))
   $duplicateScanRoots = @(
+    $targets
     Get-FastLoopKnownCepRoots -InstallRoot $InstallRoot -InstallScope "CurrentUser"
     Get-FastLoopKnownCepRoots -InstallRoot "" -InstallScope "CurrentUser"
     Get-FastLoopKnownCepRoots -InstallRoot "" -InstallScope "AllUsers"
@@ -40,22 +44,52 @@ try {
     })
   $registryState = Get-FastLoopUnsignedExtensionState -RegistryBasePath $RegistryBasePath
   $duplicates = Find-FastLoopDuplicateBundles -KnownRoots $duplicateScanRoots -ExpectedBundleId $script:FastLoopBundleId
+  $installedTargets = @($targetReports | Where-Object { $_.Exists -and $_.IsComplete } | ForEach-Object {
+      [PSCustomObject]@{
+        Scope = $_.Scope
+        Root = Split-Path -Parent $_.TargetRoot
+        TargetRoot = $_.TargetRoot
+        ManifestSummary = $_.ManifestSummary
+      }
+    })
+  $primaryManifestSummary = @($installedTargets | Select-Object -ExpandProperty ManifestSummary | Select-Object -First 1)
+  $currentVersion = if ($primaryManifestSummary) { [string]$primaryManifestSummary.ExtensionBundleVersion } else { "" }
+  $higherPriorityConflicts = @(
+    $duplicates | Where-Object {
+      $_.Scope -eq "AllUsers" -and
+      (($_.ExtensionBundleVersion -ne $currentVersion) -or (@($installedTargets | ForEach-Object { $_.TargetRoot }) -notcontains $_.BundleRoot))
+    }
+  )
+  $hostReadiness = New-FastLoopHostReadinessReport `
+    -ManifestSummary $primaryManifestSummary `
+    -InstalledTargets $installedTargets `
+    -DuplicateBundles $duplicates `
+    -UnsignedReady (@($registryState | Where-Object { -not $_.Enabled }).Count -eq 0)
   $isReady = (
-    (@($targetReports | Where-Object { $_.Exists -and $_.IsComplete }).Count -gt 0) -and
-    (@($registryState | Where-Object { -not $_.Enabled }).Count -eq 0)
+    (@($installedTargets).Count -gt 0) -and
+    (@($registryState | Where-Object { -not $_.Enabled }).Count -eq 0) -and
+    ($higherPriorityConflicts.Count -eq 0)
   )
 
   $summary = [PSCustomObject]@{
     version = $script:FastLoopVersion
     bundleId = $script:FastLoopBundleId
     ready = $isReady
-    installTargets = $targetReports
-    registryState = $registryState
-    duplicateBundles = $duplicates
+    installScope = $InstallScope
+    resolvedRoots = [PSCustomObject]@{
+      perUserRoot = $targetPlan.PerUserRoot
+      systemRoots = $targetPlan.SystemRoots
+    }
+    installTargets = @($targetReports)
+    registryState = @($registryState)
+    duplicateBundles = @($duplicates)
+    higherPriorityConflicts = @($higherPriorityConflicts)
+    hostReadiness = @($hostReadiness)
     guidance = @(
       "Restart Premiere Pro or After Effects after install.",
       "Open Window > Extensions (Legacy) > FastLoop on newer Adobe builds.",
-      "If FastLoop is still missing, inspect CEP logs under %LOCALAPPDATA%\\Temp for CEP*-PPRO.log or CEP*-AEFT.log."
+      "If FastLoop is still missing, inspect CEP logs under %LOCALAPPDATA%\\Temp for CEP*-PPRO.log or CEP*-AEFT.log.",
+      "If FastLoop exists only under the CurrentUser CEP root, try an AllUsers install if you have permission."
     )
   }
 

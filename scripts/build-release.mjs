@@ -3,6 +3,7 @@ import { cp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 
 const workspaceRoot = process.cwd();
 const packageJson = JSON.parse(await readFile(path.join(workspaceRoot, "package.json"), "utf8"));
@@ -67,6 +68,22 @@ function runPowerShell(command) {
       stdio: "inherit"
     }
   );
+}
+
+async function runPowerShellWithRetries(command, retries = 5, waitMs = 750) {
+  let lastError;
+  for (let attempt = 1; attempt <= retries; attempt += 1) {
+    try {
+      runPowerShell(command);
+      return;
+    } catch (error) {
+      lastError = error;
+      if (attempt === retries) {
+        throw lastError;
+      }
+      await delay(waitMs);
+    }
+  }
 }
 
 function renderPortableInstallScript(template, currentVersion) {
@@ -198,7 +215,7 @@ await cp(path.join(workspaceRoot, "release", "CHECKLIST.md"), path.join(releaseR
 await cp(path.join(workspaceRoot, "release", "SIGNING.md"), path.join(releaseRoot, "SIGNING.md"));
 await cp(path.join(workspaceRoot, "release", "signing.env.example"), path.join(releaseRoot, "signing.env.example"));
 
-runPowerShell(`Compress-Archive -Path '${portableRoot}\\*' -DestinationPath '${portableZipPath}' -Force`);
+await runPowerShellWithRetries(`Compress-Archive -Path '${portableRoot}\\*' -DestinationPath '${portableZipPath}' -Force`);
 
 await cp(path.join(portableRoot, "Install-FastLoop.ps1"), path.join(installerStageRoot, "Install-FastLoop.ps1"));
 await writeFile(path.join(installerStageRoot, "Install-FastLoop.cmd"), createInstallerBatch(), "utf8");

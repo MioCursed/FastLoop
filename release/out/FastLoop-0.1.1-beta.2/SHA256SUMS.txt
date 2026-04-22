@@ -1,0 +1,2 @@
+e61c73e52a338454a4a64953757ca6980976fa8bf07ebe63f4932d80323777cc  FastLoop-Windows-x64-Setup.exe
+b407c8e8c86fb3dcc3a2d581d92f00702b673a669c195bfd8923e02eca16b3bf  FastLoop-Windows-x64.zip
