@@ -2,34 +2,58 @@
 
 ## End-User Install
 
-This is the normal user path for Windows. It uses the packaged FastLoop engine runtime, so the user does not need a manual Python install for standard panel usage.
+FastLoop should be installed from GitHub Releases.
 
-1. Download or build a release artifact with `npm run release:build`.
-2. Open `release/out/FastLoop-<version>/`.
-3. Copy the `FastLoop/` extension folder into your CEP extension location.
-4. If your Adobe environment requires unsigned CEP extensions, enable unsigned CEP loading for local testing.
-5. Open Premiere Pro or After Effects and launch the `FastLoop` panel.
-6. Use `Choose Audio` to pick a track, `Choose Export Folder` to set the output path, then run analyze, preview, export, and commit.
+Releases page:
 
-Current install boundary:
+- https://github.com/MioCursed/FastLoop/releases
 
-- the release output is an unsigned CEP extension bundle plus the packaged Windows engine runtime
-- signing and a true one-click installer remain the next release milestone
-- host-side rendered asset handoff currently imports the exported extended mix during commit when available
+Downloads:
 
-Typical CEP extension folder on Windows:
+- Recommended: `FastLoop-Windows-x64-Setup.exe`
+- Alternative: `FastLoop-Windows-x64.zip`
+
+### Recommended Install Path
+
+1. Open GitHub Releases.
+2. Download `FastLoop-Windows-x64-Setup.exe`.
+3. Run the installer.
+4. Open Premiere Pro or After Effects.
+5. Launch the `FastLoop` panel.
+6. Choose audio, analyze, preview, export, and commit.
+
+### Portable/Fallback Path
+
+1. Download `FastLoop-Windows-x64.zip`.
+2. Extract the archive.
+3. Run `Install-FastLoop.cmd`.
+4. Open Premiere Pro or After Effects and launch `FastLoop`.
+
+The zip package is a fallback path. The installer is the primary user-facing method.
+
+### Requirements
+
+- Windows x64
+- Adobe Premiere Pro or Adobe After Effects with CEP panel support
+
+### Notes
+
+- the packaged Windows runtime is included, so the normal release path does not require a manual Python install
+- exported previews and renders go to the selected export destination when provided
+- if no output folder is chosen in the panel, FastLoop falls back to `.fastloop-output/`
+- the current installer and zip are usable prerelease assets
+
+### Advanced / Fallback CEP Path
+
+Manual CEP folder copy is no longer the main install story. Keep it only as an advanced fallback if the installer or portable helper cannot be used.
+
+Typical fallback CEP location on Windows:
 
 - `%AppData%\Adobe\CEP\extensions\FastLoop`
 
-FastLoop outputs:
-
-- previews and exports go to the selected export destination when provided
-- if no folder is chosen, FastLoop falls back to `.fastloop-output/`
-- metadata JSON is written alongside the exported audio set
-
 ## Developer Setup
 
-Use this path when you need to edit, rebuild, or validate the project.
+Developer setup is secondary to the release install path.
 
 Requirements:
 
@@ -53,14 +77,15 @@ npm run build:mock
 npm run build:engine-runtime
 npm run runtime:validate
 npm run smoke:panel
+npm run smoke:panel:packaged
 npm run smoke:mock
 npm run smoke:host
 npm run smoke:render
+npm run docs:validate
 npm run release:build
 npm run release:validate
-npm run docs:validate
 ```
 
 Developer note:
 
-- manual Python install is still required for engine development and PyInstaller rebuilds, even though the packaged end-user path avoids that dependency
+- a manual Python install is still required for engine development and PyInstaller rebuilds, even though the packaged end-user path avoids that dependency

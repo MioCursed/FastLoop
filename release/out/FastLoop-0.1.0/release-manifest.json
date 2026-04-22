@@ -1,21 +1,38 @@
 {
   "product": "FastLoop",
   "version": "0.1.0",
-  "builtAt": "2026-04-22T14:35:49.558Z",
-  "extensionBundlePath": "C:\\Users\\Nataniel\\Downloads\\FastLoop\\release\\out\\FastLoop-0.1.0\\FastLoop",
+  "channel": "prerelease",
+  "builtAt": "2026-04-22T19:19:09.975Z",
+  "primaryDownload": "FastLoop-Windows-x64-Setup.exe",
+  "secondaryDownload": "FastLoop-Windows-x64.zip",
+  "releaseRoot": "C:\\Users\\Nataniel\\Downloads\\FastLoop\\release\\out\\FastLoop-0.1.0",
+  "portableRoot": "C:\\Users\\Nataniel\\Downloads\\FastLoop\\release\\out\\FastLoop-0.1.0\\FastLoop-Windows-x64",
   "artifacts": {
-    "manifest": "C:\\Users\\Nataniel\\Downloads\\FastLoop\\release\\out\\FastLoop-0.1.0\\FastLoop\\CSXS\\manifest.xml",
-    "panelEntry": "C:\\Users\\Nataniel\\Downloads\\FastLoop\\release\\out\\FastLoop-0.1.0\\FastLoop\\dist\\index.html",
-    "hostIndex": "C:\\Users\\Nataniel\\Downloads\\FastLoop\\release\\out\\FastLoop-0.1.0\\FastLoop\\host-index.jsx",
-    "premiereHost": "C:\\Users\\Nataniel\\Downloads\\FastLoop\\release\\out\\FastLoop-0.1.0\\FastLoop\\host-premiere\\jsx\\fastloop_premiere.jsx",
-    "afterEffectsHost": "C:\\Users\\Nataniel\\Downloads\\FastLoop\\release\\out\\FastLoop-0.1.0\\FastLoop\\host-aftereffects\\jsx\\fastloop_aftereffects.jsx",
+    "installer": "C:\\Users\\Nataniel\\Downloads\\FastLoop\\release\\out\\FastLoop-0.1.0\\FastLoop-Windows-x64-Setup.exe",
+    "portableZip": "C:\\Users\\Nataniel\\Downloads\\FastLoop\\release\\out\\FastLoop-0.1.0\\FastLoop-Windows-x64.zip",
+    "checksums": "C:\\Users\\Nataniel\\Downloads\\FastLoop\\release\\out\\FastLoop-0.1.0\\SHA256SUMS.txt",
+    "releaseNotes": "C:\\Users\\Nataniel\\Downloads\\FastLoop\\release\\out\\FastLoop-0.1.0\\release-notes.md",
     "installGuide": "C:\\Users\\Nataniel\\Downloads\\FastLoop\\release\\out\\FastLoop-0.1.0\\INSTALL.md",
-    "releaseGuide": "C:\\Users\\Nataniel\\Downloads\\FastLoop\\release\\out\\FastLoop-0.1.0\\RELEASE.md",
-    "packagedRuntime": "C:\\Users\\Nataniel\\Downloads\\FastLoop\\release\\out\\FastLoop-0.1.0\\FastLoop\\engine-runtime\\windows-x64\\fastloop-engine-runtime\\fastloop-engine-runtime.exe"
+    "changelog": "C:\\Users\\Nataniel\\Downloads\\FastLoop\\release\\out\\FastLoop-0.1.0\\CHANGELOG.md",
+    "extensionBundle": "C:\\Users\\Nataniel\\Downloads\\FastLoop\\release\\out\\FastLoop-0.1.0\\FastLoop-Windows-x64\\FastLoop",
+    "manifest": "C:\\Users\\Nataniel\\Downloads\\FastLoop\\release\\out\\FastLoop-0.1.0\\FastLoop-Windows-x64\\FastLoop\\CSXS\\manifest.xml",
+    "panelEntry": "C:\\Users\\Nataniel\\Downloads\\FastLoop\\release\\out\\FastLoop-0.1.0\\FastLoop-Windows-x64\\FastLoop\\dist\\index.html",
+    "hostIndex": "C:\\Users\\Nataniel\\Downloads\\FastLoop\\release\\out\\FastLoop-0.1.0\\FastLoop-Windows-x64\\FastLoop\\host-index.jsx",
+    "runtimeExecutable": "C:\\Users\\Nataniel\\Downloads\\FastLoop\\release\\out\\FastLoop-0.1.0\\FastLoop-Windows-x64\\FastLoop\\engine-runtime\\windows-x64\\fastloop-engine-runtime\\fastloop-engine-runtime.exe",
+    "assetList": "C:\\Users\\Nataniel\\Downloads\\FastLoop\\release\\out\\FastLoop-0.1.0\\asset-list.txt"
+  },
+  "signing": {
+    "windowsInstallerSigned": false,
+    "cepBundleSigned": false
+  },
+  "sizes": {
+    "installerBytes": 52295168,
+    "portableZipBytes": 52453424
   },
   "notes": [
-    "Unsigned CEP bundle for staging and manual install.",
-    "Windows packaged engine runtime is bundled when present so end users do not need to install Python.",
-    "ZXPSignCMD signing is intentionally left for the next release step."
+    "GitHub Releases is the intended end-user installation channel.",
+    "The Windows x64 installer is the primary asset.",
+    "The Windows x64 zip is the secondary portable asset.",
+    "Signing hooks are prepared separately and remain the next production-release step."
   ]
 }

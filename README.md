@@ -1,12 +1,25 @@
 # FastLoop
 
-FastLoop is a CEP-based Adobe extension for Premiere Pro and After Effects focused on editor-facing music loop discovery, seamless preview, bed building, export packaging, and host-side commit workflows.
+FastLoop is a CEP-based Adobe extension for Premiere Pro and After Effects focused on loop discovery, seamless preview, music bed building, export packaging, and editor-oriented host commit workflows.
 
 The interface is intentionally built as a dense desktop utility with waveform-first analysis, compact controls, and practical action grouping inspired by the workflow feel of Shutter Encoder, rebuilt clean-room style for loop work.
 
+## Download
+
+End users should install FastLoop from GitHub Releases:
+
+- Recommended: `FastLoop-Windows-x64-Setup.exe`
+- Alternative: `FastLoop-Windows-x64.zip`
+
+GitHub Releases:
+
+- https://github.com/MioCursed/FastLoop/releases
+
+The Windows x64 installer is the primary download. The zip package is the secondary portable fallback.
+
 ## Current Status
 
-The repository already includes a working user-facing MVP foundation:
+The repository already includes a working release-first MVP foundation:
 
 - deterministic Python analysis engine with waveform extraction, BPM/beat/bar/phrase heuristics, candidate generation, and transparent score breakdowns
 - duration-aware ranking and lightweight secondary reranking
@@ -14,23 +27,33 @@ The repository already includes a working user-facing MVP foundation:
 - real seamless preview rendering and local export execution
 - file picker and export destination selection inside the panel
 - Premiere Pro and After Effects host payload flow for markers, commit, and initial rendered-asset handoff
-- mock mode for local UI work without Adobe
 - packaged Windows engine runtime so end users do not need a manual Python install for the standard release path
+- release assets structured for GitHub Releases with a primary installer and secondary portable zip
 
-## Install And Use
+## Installation
 
-Use [INSTALL.md](./INSTALL.md) for the full setup guide.
+Use [INSTALL.md](./INSTALL.md) for the full release-oriented install guide.
 
-End-user release flow:
+Short version:
 
-```bash
-npm run release:build
-npm run release:validate
-```
+1. Open the GitHub Releases page.
+2. Download `FastLoop-Windows-x64-Setup.exe`.
+3. Run the installer.
+4. Open Premiere Pro or After Effects.
+5. Launch the `FastLoop` panel and use it.
 
-That produces a versioned unsigned CEP bundle under `release/out/` with the packaged Windows engine runtime included when built.
+If you prefer not to run the installer, download `FastLoop-Windows-x64.zip`, extract it, and run the included install helper.
+
+## Included In Release Assets
+
+- CEP extension bundle for Premiere Pro and After Effects
+- packaged Windows engine runtime
+- install helper scripts for portable installs
+- release notes and checksums
 
 ## Developer Setup
+
+Developer setup is secondary to the GitHub Releases install path.
 
 Requirements:
 
@@ -59,6 +82,8 @@ npm run smoke:panel:packaged
 npm run smoke:mock
 npm run smoke:host
 npm run docs:validate
+npm run release:build
+npm run release:validate
 ```
 
 ## Workspace Layout
@@ -70,21 +95,14 @@ npm run docs:validate
 - `engine/`: deterministic analysis, preview, export, and packaged runtime entrypoints
 - `shared/`: shared TypeScript contracts, scoring helpers, and presets
 - `mock/`: standalone mock-mode runtime for panel development
-- `release/`: release notes, checklist, and versioned distribution output
+- `release/`: release templates, signing notes, checklist, and versioned distribution output
+- `.github/workflows/`: GitHub Releases automation
 - `scripts/`: smoke validations, release scripts, and documentation checks
-
-## Implemented Runtime Flow
-
-1. Choose a source file from the panel file picker.
-2. Analyze the track and review ranked loop candidates with score details.
-3. Preview a one-cycle or repeating seamless loop locally.
-4. Choose an export destination and render intro, loop, outro, extended bed, and metadata JSON.
-5. Commit the selected candidate to Premiere Pro or After Effects, with rendered-asset handoff when an exported bed is available.
 
 ## Notes
 
 - CEP remains the MVP runtime path.
 - The deterministic DSP pipeline remains the primary ranking foundation.
 - The rerank layer is intentionally lightweight and local; it does not replace deterministic scoring.
-- If no export destination is chosen, FastLoop falls back to `.fastloop-output/`.
-- Signing and a true one-click installer are still the next packaging milestone.
+- GitHub Releases is the main end-user installation channel.
+- Current assets are installer-ready and release-ready, but still unsigned prerelease assets until signing is added.

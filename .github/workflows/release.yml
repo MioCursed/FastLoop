@@ -1,0 +1,89 @@
+name: Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install JavaScript dependencies
+        run: npm ci
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ./engine pyinstaller pyyaml
+
+      - name: Validate workflow YAML
+        run: |
+          python -c "import pathlib, yaml; yaml.safe_load(pathlib.Path('.github/workflows/release.yml').read_text(encoding='utf8')); print('workflow-yaml-ok')"
+
+      - name: Run release build
+        run: npm run release:build
+
+      - name: Validate release output
+        run: npm run release:validate
+
+      - name: Validate docs
+        run: npm run docs:validate
+
+      - name: Determine release version
+        id: version
+        shell: pwsh
+        run: |
+          $package = Get-Content package.json | ConvertFrom-Json
+          "version=$($package.version)" >> $env:GITHUB_OUTPUT
+
+      - name: Signing placeholder
+        shell: pwsh
+        run: |
+          if ("${{ secrets.WINDOWS_CODE_SIGN_CERT_BASE64 }}" -and "${{ secrets.WINDOWS_CODE_SIGN_PASSWORD }}") {
+            Write-Host "Signing secrets detected. Insert real signtool integration here in the next milestone."
+          } else {
+            Write-Host "No signing secrets configured. Publishing unsigned prerelease assets."
+          }
+
+      - name: Upload release artifacts to workflow run
+        uses: actions/upload-artifact@v4
+        with:
+          name: FastLoop-${{ steps.version.outputs.version }}-release
+          path: |
+            release/out/FastLoop-${{ steps.version.outputs.version }}/FastLoop-Windows-x64-Setup.exe
+            release/out/FastLoop-${{ steps.version.outputs.version }}/FastLoop-Windows-x64.zip
+            release/out/FastLoop-${{ steps.version.outputs.version }}/SHA256SUMS.txt
+            release/out/FastLoop-${{ steps.version.outputs.version }}/release-notes.md
+            release/out/FastLoop-${{ steps.version.outputs.version }}/release-manifest.json
+
+      - name: Publish GitHub Release
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/out/FastLoop-${{ steps.version.outputs.version }}/FastLoop-Windows-x64-Setup.exe
+            release/out/FastLoop-${{ steps.version.outputs.version }}/FastLoop-Windows-x64.zip
+            release/out/FastLoop-${{ steps.version.outputs.version }}/SHA256SUMS.txt
+            release/out/FastLoop-${{ steps.version.outputs.version }}/release-notes.md
+            release/out/FastLoop-${{ steps.version.outputs.version }}/release-manifest.json
+          body_path: release/out/FastLoop-${{ steps.version.outputs.version }}/release-notes.md
+          prerelease: true

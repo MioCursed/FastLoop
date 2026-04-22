@@ -13,10 +13,24 @@ const specPath = path.join(workspaceRoot, "release", "build", "pyinstaller", "sp
 const exeDir = path.join(runtimeBuildRoot, "fastloop-engine-runtime");
 const exePath = path.join(exeDir, "fastloop-engine-runtime.exe");
 
+async function removeWithRetries(targetPath, attempts = 5) {
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      await rm(targetPath, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      if (attempt === attempts) {
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 750 * attempt));
+    }
+  }
+}
+
 await mkdir(runtimeBuildRoot, { recursive: true });
 await mkdir(workPath, { recursive: true });
 await mkdir(specPath, { recursive: true });
-await rm(exeDir, { recursive: true, force: true });
+await removeWithRetries(exeDir);
 
 execFileSync(
   "python",

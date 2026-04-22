@@ -6,8 +6,12 @@ const workspaceRoot = process.cwd();
 const requiredFiles = [
   "README.md",
   "INSTALL.md",
+  "CHANGELOG.md",
   "release/README.md",
   "release/CHECKLIST.md",
+  "release/SIGNING.md",
+  "release/signing.env.example",
+  ".github/workflows/release.yml",
   "scripts/build-release.mjs",
   "scripts/build-engine-runtime.mjs"
 ];
@@ -23,20 +27,23 @@ const [readme, installGuide] = await Promise.all([
 
 const readmeExpectations = [
   "Current Status",
-  "packaged Windows engine runtime",
-  "file picker",
-  "export destination",
-  "release:build",
-  "INSTALL.md"
+  "GitHub Releases",
+  "FastLoop-Windows-x64-Setup.exe",
+  "FastLoop-Windows-x64.zip",
+  "installer",
+  "INSTALL.md",
+  "Developer Setup"
 ];
 
 const installExpectations = [
   "End-User Install",
   "Developer Setup",
-  "release:build",
-  "build:engine-runtime",
-  "CEP extension",
-  "manual Python install"
+  "GitHub Releases",
+  "FastLoop-Windows-x64-Setup.exe",
+  "FastLoop-Windows-x64.zip",
+  "manual Python install",
+  "fallback",
+  "Developer Setup"
 ];
 
 for (const expected of readmeExpectations) {

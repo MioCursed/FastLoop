@@ -13,7 +13,14 @@
 11. Run `npm run smoke:mock`.
 12. Run `npm run smoke:host`.
 13. Run `npm run docs:validate`.
-14. Run `npm run release:build`.
-15. Run `npm run release:validate`.
-16. Confirm `release/out/FastLoop-<version>/` contains the CEP bundle, packaged runtime, install guide, and unsigned zip.
-17. Sign the CEP bundle and wrap it in a true installer in the next release stage when required.
+14. Run workflow YAML validation before publishing.
+15. Run `npm run release:build`.
+16. Run `npm run release:validate`.
+17. Confirm `release/out/FastLoop-<version>/` contains:
+   `FastLoop-Windows-x64-Setup.exe`
+   `FastLoop-Windows-x64.zip`
+   `SHA256SUMS.txt`
+   `release-notes.md`
+   `release-manifest.json`
+18. Publish the generated assets to GitHub Releases.
+19. Add real signing in the next production-release stage when certificate material is available.
