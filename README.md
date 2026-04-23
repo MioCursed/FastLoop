@@ -19,7 +19,7 @@ The Windows x64 installer is the primary download. The zip package is the second
 
 ## Current Status
 
-The repository already includes a working release-first MVP foundation:
+The repository already includes a working release-first prerelease foundation:
 
 - deterministic Python analysis engine with waveform extraction, BPM/beat/bar/phrase heuristics, candidate generation, and transparent score breakdowns
 - duration-aware ranking and lightweight secondary reranking
@@ -29,6 +29,7 @@ The repository already includes a working release-first MVP foundation:
 - Premiere Pro and After Effects host payload flow for markers, commit, and initial rendered-asset handoff
 - packaged Windows engine runtime so end users do not need a manual Python install for the standard release path
 - release assets structured for GitHub Releases with a primary installer and secondary portable zip
+- visual installer-panel path, install verification, install logs, and host-readiness diagnostics for CEP visibility issues
 
 ## Installation
 
@@ -40,7 +41,7 @@ Short version:
 2. Download `FastLoop-Windows-x64-Setup.exe`.
 3. Run the installer.
 4. Open Premiere Pro or After Effects.
-5. Open `Window > Extensions (Legacy) > FastLoop` on newer Adobe builds, or `Window > Extensions > FastLoop` on older builds.
+5. Check `Window > Extensions (Legacy) > FastLoop` on newer Adobe builds, or `Window > Extensions > FastLoop` on older builds.
 6. Use the panel.
 
 If you prefer not to run the installer, download `FastLoop-Windows-x64.zip`, extract it, and run the included install helper.
@@ -51,7 +52,8 @@ If you prefer not to run the installer, download `FastLoop-Windows-x64.zip`, ext
 - packaged Windows engine runtime
 - install helper scripts for portable installs
 - host-readiness helper for CEP visibility diagnostics
-- release notes and checksums
+- release notes, checksums, and release manifest output
+- install logs and verification summaries for troubleshooting prerelease install/load issues
 
 ## Developer Setup
 
@@ -73,6 +75,7 @@ Useful commands:
 
 ```bash
 npm run typecheck
+npm run cep:validate
 npm run build:shared
 npm run build:panel
 npm run build:mock
@@ -83,6 +86,7 @@ npm run smoke:panel
 npm run smoke:panel:packaged
 npm run smoke:mock
 npm run smoke:host
+npm run smoke:install
 npm run docs:validate
 npm run release:build
 npm run release:validate
@@ -97,7 +101,7 @@ npm run release:validate
 - `engine/`: deterministic analysis, preview, export, and packaged runtime entrypoints
 - `shared/`: shared TypeScript contracts, scoring helpers, and presets
 - `mock/`: standalone mock-mode runtime for panel development
-- `release/`: release templates, signing notes, checklist, and versioned distribution output
+- `release/`: release templates, signing notes, checklist, troubleshooting, and versioned distribution output
 - `.github/workflows/`: GitHub Releases automation
 - `scripts/`: smoke validations, release scripts, and documentation checks
 
@@ -108,4 +112,5 @@ npm run release:validate
 - The rerank layer is intentionally lightweight and local; it does not replace deterministic scoring.
 - GitHub Releases is the main end-user installation channel.
 - Current assets are installer-ready and release-ready, but still unsigned prerelease assets until signing is added.
-- The unsigned prerelease install path now prepares `PlayerDebugMode` for CEP 11 and CEP 12 under the current user profile.
+- The unsigned prerelease install path prepares `PlayerDebugMode` for CEP 11 and CEP 12 under the current user profile.
+- If FastLoop installs but does not appear, use the packaged host-readiness helper and follow `release/TROUBLESHOOTING.md`.
