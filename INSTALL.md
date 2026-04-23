@@ -26,7 +26,7 @@ Downloads:
 
 1. Download `FastLoop-Windows-x64.zip`.
 2. Extract the archive.
-3. Run `Install-FastLoop.cmd`.
+3. Run `Install-FastLoop.cmd` (abre o painel instalador visual do FastLoop).
 4. Open Premiere Pro or After Effects and launch `FastLoop`.
 
 The zip package is a fallback path. The installer is the primary user-facing method.
@@ -35,6 +35,7 @@ Advanced installer flags:
 
 - `-PreferAllUsers` to prioritize system-wide CEP roots when you have permissions.
 - `-AllowRunningHosts` to bypass the safety stop if Premiere/After Effects are currently running (not recommended).
+- `-UseInstallerPanel` to force the visual installer panel when running `Install-FastLoop.ps1` directly.
 
 ### Requirements
 

@@ -46,6 +46,12 @@ If your environment consistently favors system CEP roots, reinstall with `-Prefe
 powershell -NoProfile -ExecutionPolicy Bypass -File .\Install-FastLoop.ps1 -PreferAllUsers
 ```
 
+Para abrir o instalador em modo painel visual (estilo wizard), execute:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Install-FastLoop.ps1 -UseInstallerPanel
+```
+
 ## Built-In Readiness Check
 
 Run the packaged helper after install:
