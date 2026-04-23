@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import vm from "node:vm";
 
-const workspaceRoot = "c:/Users/Nataniel/Downloads/FastLoop";
+const workspaceRoot = process.cwd();
 
 async function runPremiereValidation() {
   const code = await readFile(`${workspaceRoot}/host-premiere/jsx/fastloop_premiere.jsx`, "utf8");

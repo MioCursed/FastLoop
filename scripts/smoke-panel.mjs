@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { JSDOM } from "jsdom";
 
-const workspaceRoot = "c:/Users/Nataniel/Downloads/FastLoop";
+const workspaceRoot = process.cwd();
 const fixtureBuilder = `${workspaceRoot}/engine/tests/fixture_builder.py`;
 const fixturePath = `${workspaceRoot}/engine/tests/generated/loop_fixture.wav`;
 

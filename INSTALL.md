@@ -26,10 +26,16 @@ Downloads:
 
 1. Download `FastLoop-Windows-x64.zip`.
 2. Extract the archive.
-3. Run `Install-FastLoop.cmd`.
+3. Run `Install-FastLoop.cmd` (abre o painel instalador visual do FastLoop).
 4. Open Premiere Pro or After Effects and launch `FastLoop`.
 
 The zip package is a fallback path. The installer is the primary user-facing method.
+
+Advanced installer flags:
+
+- `-PreferAllUsers` to prioritize system-wide CEP roots when you have permissions.
+- `-AllowRunningHosts` to bypass the safety stop if Premiere/After Effects are currently running (not recommended).
+- `-UseInstallerPanel` to force the visual installer panel when running `Install-FastLoop.ps1` directly.
 
 ### Requirements
 
@@ -61,12 +67,14 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\Test-FastLoop-HostReadines
 ```
 
 4. Confirm the readiness report marks Premiere and/or After Effects as likely ready.
+   - Newer reports also split `preconditionsReady` vs `hostLoadEvidenceConfirmed`.
 5. Confirm `manifest.xml` exists in the installed CEP root.
 6. Confirm `PlayerDebugMode` is set to `1` under:
    - `HKEY_CURRENT_USER\Software\Adobe\CSXS.11`
    - `HKEY_CURRENT_USER\Software\Adobe\CSXS.12`
 7. If FastLoop exists only in the CurrentUser CEP root, try an AllUsers install if you have permission.
 8. If the panel is still missing, inspect Adobe CEP logs under `%LOCALAPPDATA%\Temp`.
+9. Re-run install with `-PreferAllUsers` if your environment consistently loads CEP from system roots first.
 
 ### Advanced / Fallback CEP Path
 
