@@ -10,6 +10,8 @@
 - CEP extension bundle for Premiere Pro and After Effects
 - packaged Windows engine runtime so the standard release path does not require a manual Python install
 - analyze, preview, export, and commit workflow in the FastLoop panel
+- visual installer panel flow (`-UseInstallerPanel`) with scope and safety options
+- host-load diagnostics that scan CEP logs and classify readiness evidence per host
 - release manifest, checksums, and install documentation aligned with the GitHub Releases workflow
 
 ## Installation Path

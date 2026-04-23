@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.1-beta.3
+
+- adds a visual installer panel flow for Windows install (`-UseInstallerPanel`) with guided scope/options
+- adds host-load proof diagnostics from CEP logs (`confirmed` / `error-signals` / `no-evidence`) for PPRO/AEFT
+- separates readiness into preconditions vs host-load evidence in install/readiness JSON outputs
+- keeps shared CEP bundle architecture (PPRO + AEFT) and portable smoke-path fixes from prior blocks
+
 ## 0.1.1-beta.2
 
 - aligns the next prerelease around GitHub Releases as the primary install path
