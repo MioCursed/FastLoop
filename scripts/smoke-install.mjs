@@ -28,8 +28,9 @@ const envOverrides = {
 
 const parseJsonReport = async (filePath) => {
   const content = await readFile(filePath, "utf8");
+  const normalizedContent = content.replace(/^\uFEFF/, "");
   try {
-    return JSON.parse(content);
+    return JSON.parse(normalizedContent);
   } catch (error) {
     throw new Error(`Invalid JSON report at ${filePath}: ${error.message}`);
   }
@@ -61,6 +62,8 @@ const toStaleManifestVersion = (manifestVersion) => {
 
   return `${manifestVersion}.0`;
 };
+
+const normalizePathForCompare = (value) => String(value ?? "").replaceAll("\\", "/").toLowerCase();
 
 await rm(validationRoot, { recursive: true, force: true });
 await mkdir(logRoot, { recursive: true });
@@ -283,23 +286,27 @@ assertField(
   "higherPriorityConflicts",
   "Expected at least one conflict entry explaining stale AllUsers duplicate."
 );
-const staleConflictEntry = conflictReport.higherPriorityConflicts[0];
+const staleConflictEntry = conflictReport.higherPriorityConflicts.find(
+  (entry) =>
+    entry?.Scope === "AllUsers" &&
+    normalizePathForCompare(entry?.BundleRoot) === normalizePathForCompare(staleConflictRoot)
+);
 assertField(
-  staleConflictEntry?.Scope === "AllUsers",
+  Boolean(staleConflictEntry),
   conflictReportPath,
-  "higherPriorityConflicts[0].Scope",
-  `Expected AllUsers conflict scope, received ${String(staleConflictEntry?.Scope)}.`
+  "higherPriorityConflicts[BundleRoot=staleConflictRoot]",
+  "Expected stale AllUsers conflict entry matching the stale fixture bundle root."
 );
 assertField(
   Boolean(staleConflictEntry?.BundleRoot),
   conflictReportPath,
-  "higherPriorityConflicts[0].BundleRoot",
+  "higherPriorityConflicts[BundleRoot=staleConflictRoot].BundleRoot",
   "Expected conflict entry to include BundleRoot cause detail."
 );
 assertField(
   staleConflictEntry?.ExtensionBundleVersion !== manifestVersionMatch[1],
   conflictReportPath,
-  "higherPriorityConflicts[0].ExtensionBundleVersion",
+  "higherPriorityConflicts[BundleRoot=staleConflictRoot].ExtensionBundleVersion",
   `Expected stale conflict version different from ${String(manifestVersionMatch[1])}, received ${String(staleConflictEntry?.ExtensionBundleVersion)}.`
 );
 const conflictPpro = (Array.isArray(conflictReport.hostReadiness) ? conflictReport.hostReadiness : []).find(
