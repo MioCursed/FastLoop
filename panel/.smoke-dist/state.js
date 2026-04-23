@@ -4,8 +4,8 @@ export function createInitialState() {
         tracks: [
             {
                 id: "track-01",
-                name: "Workspace Fixture",
-                sourcePath: "c:/Users/Nataniel/Downloads/FastLoop/engine/tests/generated/loop_fixture.wav",
+                name: "Track 1",
+                sourcePath: "",
                 durationSeconds: 0,
                 cacheState: "missing"
             },
