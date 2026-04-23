@@ -64,8 +64,8 @@ for (const hostName of ["PPRO", "AEFT"]) {
   }
 }
 
-if (!manifestXml.includes('<RequiredRuntime Name="CSXS" Version="11.0" />')) {
-  throw new Error("Manifest no longer declares the expected CEP 11 runtime.");
+if (!manifestXml.includes('<RequiredRuntime Name="CSXS" Version="[11.0,99.9]" />')) {
+  throw new Error("Manifest no longer declares the expected CEP runtime range (11.0+).");
 }
 
 for (const relativePath of [

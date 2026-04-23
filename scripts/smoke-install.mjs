@@ -26,6 +26,45 @@ const envOverrides = {
   FASTLOOP_CEP_SYSTEM_ROOTS: `${systemRootA};${systemRootB}`
 };
 
+const parseJsonReport = async (filePath) => {
+  const content = await readFile(filePath, "utf8");
+  const normalizedContent = content.replace(/^\uFEFF/, "");
+  try {
+    return JSON.parse(normalizedContent);
+  } catch (error) {
+    throw new Error(`Invalid JSON report at ${filePath}: ${error.message}`);
+  }
+};
+
+const assertField = (condition, filePath, fieldPath, message) => {
+  if (!condition) {
+    throw new Error(`Assertion failed for ${filePath} at "${fieldPath}": ${message}`);
+  }
+};
+
+const toStaleManifestVersion = (manifestVersion) => {
+  if (typeof manifestVersion !== "string" || manifestVersion.trim() === "") {
+    return "0.0.0.0";
+  }
+
+  const segments = manifestVersion.split(".").map((segment) => Number.parseInt(segment, 10));
+  if (segments.some((segment) => Number.isNaN(segment))) {
+    return "0.0.0.0";
+  }
+
+  const staleSegments = [...segments];
+  for (let index = staleSegments.length - 1; index >= 0; index -= 1) {
+    if (staleSegments[index] > 0) {
+      staleSegments[index] -= 1;
+      return staleSegments.join(".");
+    }
+  }
+
+  return `${manifestVersion}.0`;
+};
+
+const normalizePathForCompare = (value) => String(value ?? "").replaceAll("\\", "/").toLowerCase();
+
 await rm(validationRoot, { recursive: true, force: true });
 await mkdir(logRoot, { recursive: true });
 await mkdir(failureLogRoot, { recursive: true });
@@ -97,6 +136,50 @@ const readiness = execFileSync(
   }
 );
 
+const readinessReportPath = path.join(logRoot, "host-readiness-latest.json");
+await access(readinessReportPath);
+const readinessReport = await parseJsonReport(readinessReportPath);
+const healthyHostReadiness = Array.isArray(readinessReport.hostReadiness) ? readinessReport.hostReadiness : [];
+const healthyPpro = healthyHostReadiness.find((entry) => entry?.HostName === "PPRO");
+const healthyAeft = healthyHostReadiness.find((entry) => entry?.HostName === "AEFT");
+
+assertField(
+  Boolean(healthyPpro),
+  readinessReportPath,
+  "hostReadiness[HostName=PPRO]",
+  "Missing host readiness entry for PPRO."
+);
+assertField(
+  Boolean(healthyAeft),
+  readinessReportPath,
+  "hostReadiness[HostName=AEFT]",
+  "Missing host readiness entry for AEFT."
+);
+assertField(
+  healthyPpro?.CoveredByManifest === true,
+  readinessReportPath,
+  "hostReadiness[HostName=PPRO].CoveredByManifest",
+  `Expected true, received ${String(healthyPpro?.CoveredByManifest)}.`
+);
+assertField(
+  healthyAeft?.CoveredByManifest === true,
+  readinessReportPath,
+  "hostReadiness[HostName=AEFT].CoveredByManifest",
+  `Expected true, received ${String(healthyAeft?.CoveredByManifest)}.`
+);
+assertField(
+  Array.isArray(readinessReport.higherPriorityConflicts),
+  readinessReportPath,
+  "higherPriorityConflicts",
+  "Expected an array."
+);
+assertField(
+  readinessReport.higherPriorityConflicts.length === 0,
+  readinessReportPath,
+  "higherPriorityConflicts",
+  `Expected empty array in healthy scenario, found ${readinessReport.higherPriorityConflicts.length} entr${readinessReport.higherPriorityConflicts.length === 1 ? "y" : "ies"}.`
+);
+
 execFileSync(
   "powershell",
   [
@@ -138,7 +221,19 @@ await mkdir(path.join(staleConflictRoot, "engine-runtime", "windows-x64", "fastl
   recursive: true
 });
 const staleManifest = await readFile(path.join(portableRoot, "FastLoop", "CSXS", "manifest.xml"), "utf8");
-await writeFile(path.join(staleConflictRoot, "CSXS", "manifest.xml"), staleManifest.replaceAll("0.1.1.2", "0.1.0.0"), "utf8");
+const manifestVersionMatch = staleManifest.match(/ExtensionBundleVersion="([^"]+)"/);
+assertField(
+  Boolean(manifestVersionMatch?.[1]),
+  path.join(portableRoot, "FastLoop", "CSXS", "manifest.xml"),
+  "ExtensionBundleVersion",
+  "Unable to determine manifest version for stale conflict fixture."
+);
+const staleVersion = toStaleManifestVersion(manifestVersionMatch[1]);
+await writeFile(
+  path.join(staleConflictRoot, "CSXS", "manifest.xml"),
+  staleManifest.replace(/ExtensionBundleVersion="[^"]+"/, `ExtensionBundleVersion="${staleVersion}"`),
+  "utf8"
+);
 await writeFile(path.join(staleConflictRoot, "dist", "index.html"), "<html></html>", "utf8");
 await writeFile(path.join(staleConflictRoot, "host-index.jsx"), "// stale", "utf8");
 await writeFile(path.join(staleConflictRoot, "host-premiere", "jsx", "fastloop_premiere.jsx"), "// stale", "utf8");
@@ -176,6 +271,62 @@ if (conflictReadiness.status === 0) {
 }
 
 await access(path.join(conflictLogRoot, "host-readiness-latest.json"));
+const conflictReportPath = path.join(conflictLogRoot, "host-readiness-latest.json");
+const conflictReport = await parseJsonReport(conflictReportPath);
+assertField(conflictReport.ready === false, conflictReportPath, "ready", "Expected false when stale conflict exists.");
+assertField(
+  Array.isArray(conflictReport.higherPriorityConflicts),
+  conflictReportPath,
+  "higherPriorityConflicts",
+  "Expected an array explaining conflict cause."
+);
+assertField(
+  conflictReport.higherPriorityConflicts.length > 0,
+  conflictReportPath,
+  "higherPriorityConflicts",
+  "Expected at least one conflict entry explaining stale AllUsers duplicate."
+);
+const staleConflictEntry = conflictReport.higherPriorityConflicts.find(
+  (entry) =>
+    entry?.Scope === "AllUsers" &&
+    normalizePathForCompare(entry?.BundleRoot) === normalizePathForCompare(staleConflictRoot)
+);
+assertField(
+  Boolean(staleConflictEntry),
+  conflictReportPath,
+  "higherPriorityConflicts[BundleRoot=staleConflictRoot]",
+  "Expected stale AllUsers conflict entry matching the stale fixture bundle root."
+);
+assertField(
+  Boolean(staleConflictEntry?.BundleRoot),
+  conflictReportPath,
+  "higherPriorityConflicts[BundleRoot=staleConflictRoot].BundleRoot",
+  "Expected conflict entry to include BundleRoot cause detail."
+);
+assertField(
+  staleConflictEntry?.ExtensionBundleVersion !== manifestVersionMatch[1],
+  conflictReportPath,
+  "higherPriorityConflicts[BundleRoot=staleConflictRoot].ExtensionBundleVersion",
+  `Expected stale conflict version different from ${String(manifestVersionMatch[1])}, received ${String(staleConflictEntry?.ExtensionBundleVersion)}.`
+);
+const conflictPpro = (Array.isArray(conflictReport.hostReadiness) ? conflictReport.hostReadiness : []).find(
+  (entry) => entry?.HostName === "PPRO"
+);
+const conflictAeft = (Array.isArray(conflictReport.hostReadiness) ? conflictReport.hostReadiness : []).find(
+  (entry) => entry?.HostName === "AEFT"
+);
+assertField(
+  Boolean(conflictPpro),
+  conflictReportPath,
+  "hostReadiness[HostName=PPRO]",
+  "Missing host readiness entry for PPRO in conflict scenario."
+);
+assertField(
+  Boolean(conflictAeft),
+  conflictReportPath,
+  "hostReadiness[HostName=AEFT]",
+  "Missing host readiness entry for AEFT in conflict scenario."
+);
 
 const failedInstall = spawnSync(
   "powershell",
