@@ -1,7 +1,7 @@
 import { JSDOM } from "jsdom";
 import { pathToFileURL } from "node:url";
 
-const workspaceRoot = "c:/Users/Nataniel/Downloads/FastLoop";
+const workspaceRoot = process.cwd();
 
 const dom = new JSDOM(`<!doctype html><html><body><div id="app"></div></body></html>`, {
   url: pathToFileURL(`${workspaceRoot}/mock/dist/index.html`).href

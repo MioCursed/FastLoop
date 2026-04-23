@@ -252,11 +252,91 @@ function Get-FastLoopMenuPaths([string]$HostName) {
   }
 }
 
+function Get-FastLoopCepLogFiles([string]$HostName, [int]$LookbackHours = 48) {
+  $tempRoot = Join-Path $env:LOCALAPPDATA "Temp"
+  if (-not (Test-Path -LiteralPath $tempRoot)) {
+    return @()
+  }
+
+  $patterns = switch ($HostName) {
+    "PPRO" { @("CEP*-PPRO*.log", "CEPHtmlEngine*-PPRO-*.log") }
+    "AEFT" { @("CEP*-AEFT*.log", "CEPHtmlEngine*-AEFT-*.log") }
+    default { @("CEP*.log") }
+  }
+
+  $cutoff = (Get-Date).AddHours(-1 * [Math]::Abs($LookbackHours))
+  $files = @()
+  foreach ($pattern in $patterns) {
+    $files += Get-ChildItem -LiteralPath $tempRoot -Filter $pattern -File -ErrorAction SilentlyContinue
+  }
+
+  return @(
+    $files |
+      Sort-Object LastWriteTime -Descending |
+      Where-Object { $_.LastWriteTime -ge $cutoff } |
+      Select-Object -Unique -First 40
+  )
+}
+
+function Get-FastLoopHostLoadEvidence(
+  [string]$HostName,
+  [string]$ExpectedBundleId = "com.fastloop.panel",
+  [int]$LookbackHours = 48
+) {
+  $logFiles = Get-FastLoopCepLogFiles -HostName $HostName -LookbackHours $LookbackHours
+  $bundleMentions = 0
+  $errorSignals = 0
+  $lastMentionAt = $null
+  $matchedLogs = @()
+
+  foreach ($logFile in $logFiles) {
+    try {
+      $content = Get-Content -LiteralPath $logFile.FullName -Raw -ErrorAction Stop
+    } catch {
+      continue
+    }
+
+    $matchesBundle = ($content -match [Regex]::Escape($ExpectedBundleId)) -or ($content -match "FastLoop")
+    if ($matchesBundle) {
+      $bundleMentions += 1
+      $matchedLogs += $logFile.FullName
+      if (-not $lastMentionAt -or $logFile.LastWriteTime -gt $lastMentionAt) {
+        $lastMentionAt = $logFile.LastWriteTime
+      }
+
+      if ($content -match "(?im)(error|exception|failed|cannot load|manifest|signature)") {
+        $errorSignals += 1
+      }
+    }
+  }
+
+  $status = if ($bundleMentions -eq 0) {
+    "no-evidence"
+  } elseif ($errorSignals -gt 0) {
+    "error-signals"
+  } else {
+    "confirmed"
+  }
+
+  return [PSCustomObject]@{
+    HostName = $HostName
+    LogLookbackHours = $LookbackHours
+    LogFilesScanned = $logFiles.Count
+    MentionCount = $bundleMentions
+    ErrorSignalCount = $errorSignals
+    Status = $status
+    LastMentionAt = if ($lastMentionAt) { (Get-Date $lastMentionAt -Format "o") } else { $null }
+    MatchedLogFiles = @($matchedLogs | Select-Object -Unique)
+  }
+}
+
 function New-FastLoopHostReadinessReport(
   [object]$ManifestSummary,
   [object[]]$InstalledTargets,
   [object[]]$DuplicateBundles,
-  [bool]$UnsignedReady
+  [bool]$UnsignedReady,
+  [string]$ExpectedBundleId = "com.fastloop.panel",
+  [int]$LogLookbackHours = 48
 ) {
   $hostReports = @()
   foreach ($hostName in @("PPRO", "AEFT")) {
@@ -267,11 +347,17 @@ function New-FastLoopHostReadinessReport(
     }
 
     $hostDuplicates = @($DuplicateBundles | Where-Object { $_.Scope -eq "AllUsers" -or $_.Scope -eq "CurrentUser" -or $_.Scope -eq "Custom" })
+    $loadEvidence = Get-FastLoopHostLoadEvidence -HostName $hostName -ExpectedBundleId $ExpectedBundleId -LookbackHours $LogLookbackHours
+    $preconditionsReady = ($hostCovered -and $UnsignedReady -and @($InstalledTargets).Count -gt 0)
+    $hostLoadConfirmed = ($loadEvidence.Status -eq "confirmed")
     $hostReports += [PSCustomObject]@{
       HostName = $hostName
       HostLabel = $menuInfo.HostLabel
       CoveredByManifest = $hostCovered
-      LikelyReady = ($hostCovered -and $UnsignedReady -and @($InstalledTargets).Count -gt 0)
+      PreconditionsReady = $preconditionsReady
+      HostLoadEvidence = $loadEvidence
+      HostLoadConfirmed = $hostLoadConfirmed
+      LikelyReady = ($preconditionsReady -and ($loadEvidence.Status -ne "error-signals"))
       InstalledRoots = @($InstalledTargets | ForEach-Object { $_.TargetRoot })
       DuplicateBundleCount = $hostDuplicates.Count
       PrimaryMenuPath = $menuInfo.PrimaryMenuPath
@@ -279,7 +365,8 @@ function New-FastLoopHostReadinessReport(
       Guidance = @(
         "Restart $($menuInfo.HostLabel) after install.",
         "Check $($menuInfo.PrimaryMenuPath) first.",
-        "If not visible there, also check $($menuInfo.SecondaryMenuPath)."
+        "If not visible there, also check $($menuInfo.SecondaryMenuPath).",
+        "Inspect CEP logs under %LOCALAPPDATA%\\Temp for $ExpectedBundleId load evidence."
       )
     }
   }

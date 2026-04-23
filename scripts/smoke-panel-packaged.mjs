@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { JSDOM } from "jsdom";
 
-const workspaceRoot = "c:/Users/Nataniel/Downloads/FastLoop";
+const workspaceRoot = process.cwd();
 const fixtureBuilder = `${workspaceRoot}/engine/tests/fixture_builder.py`;
 const fixturePath = `${workspaceRoot}/engine/tests/generated/loop_fixture.wav`;
 const packageJson = JSON.parse(readFileSync(path.join(workspaceRoot, "package.json"), "utf8"));

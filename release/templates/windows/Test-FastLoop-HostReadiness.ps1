@@ -2,6 +2,7 @@ param(
   [string]$InstallRoot = "",
   [ValidateSet("Auto", "CurrentUser", "AllUsers")]
   [string]$InstallScope = "Auto",
+  [int]$LogLookbackHours = 48,
   [string]$RegistryBasePath = "HKCU:\Software\Adobe",
   [string]$LogDirectory = ""
 )
@@ -64,11 +65,17 @@ try {
     -ManifestSummary $primaryManifestSummary `
     -InstalledTargets $installedTargets `
     -DuplicateBundles $duplicates `
-    -UnsignedReady (@($registryState | Where-Object { -not $_.Enabled }).Count -eq 0)
+    -UnsignedReady (@($registryState | Where-Object { -not $_.Enabled }).Count -eq 0) `
+    -ExpectedBundleId $script:FastLoopBundleId `
+    -LogLookbackHours $LogLookbackHours
+  $hostPreconditionsReady = @($hostReadiness | Where-Object { $_.PreconditionsReady }).Count -gt 0
+  $hostLoadErrorSignals = @($hostReadiness | Where-Object { $_.HostLoadEvidence.Status -eq "error-signals" }).Count -gt 0
+  $hostLoadConfirmed = @($hostReadiness | Where-Object { $_.HostLoadConfirmed }).Count -gt 0
   $isReady = (
     (@($installedTargets).Count -gt 0) -and
     (@($registryState | Where-Object { -not $_.Enabled }).Count -eq 0) -and
-    ($higherPriorityConflicts.Count -eq 0)
+    ($higherPriorityConflicts.Count -eq 0) -and
+    (-not $hostLoadErrorSignals)
   )
 
   $summary = [PSCustomObject]@{
@@ -85,6 +92,12 @@ try {
     duplicateBundles = @($duplicates)
     higherPriorityConflicts = @($higherPriorityConflicts)
     hostReadiness = @($hostReadiness)
+    readinessBreakdown = [PSCustomObject]@{
+      preconditionsReady = $hostPreconditionsReady
+      hostLoadEvidenceConfirmed = $hostLoadConfirmed
+      hostLoadErrorSignalsDetected = $hostLoadErrorSignals
+      logLookbackHours = $LogLookbackHours
+    }
     guidance = @(
       "Restart Premiere Pro or After Effects after install.",
       "Open Window > Extensions (Legacy) > FastLoop on newer Adobe builds.",
