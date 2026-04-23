@@ -31,6 +31,11 @@ Downloads:
 
 The zip package is a fallback path. The installer is the primary user-facing method.
 
+Advanced installer flags:
+
+- `-PreferAllUsers` to prioritize system-wide CEP roots when you have permissions.
+- `-AllowRunningHosts` to bypass the safety stop if Premiere/After Effects are currently running (not recommended).
+
 ### Requirements
 
 - Windows x64
@@ -67,6 +72,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\Test-FastLoop-HostReadines
    - `HKEY_CURRENT_USER\Software\Adobe\CSXS.12`
 7. If FastLoop exists only in the CurrentUser CEP root, try an AllUsers install if you have permission.
 8. If the panel is still missing, inspect Adobe CEP logs under `%LOCALAPPDATA%\Temp`.
+9. Re-run install with `-PreferAllUsers` if your environment consistently loads CEP from system roots first.
 
 ### Advanced / Fallback CEP Path
 

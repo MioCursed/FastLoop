@@ -4,6 +4,8 @@ param(
   [string]$InstallRoot = "",
   [ValidateSet("Auto", "CurrentUser", "AllUsers")]
   [string]$InstallScope = "Auto",
+  [switch]$PreferAllUsers,
+  [switch]$AllowRunningHosts,
   [bool]$EnableUnsignedPanelSupport = $true,
   [string]$RegistryBasePath = "HKCU:\Software\Adobe",
   [string]$LogDirectory = ""
@@ -32,6 +34,30 @@ function Write-InstallLog([string]$LogPath, [string]$Message) {
 
 function Write-JsonFile([string]$Path, [object]$Value) {
   $Value | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $Path -Encoding UTF8
+}
+
+function Test-PlatformPreflight() {
+  if (-not [Environment]::Is64BitOperatingSystem) {
+    throw "FastLoop requires a 64-bit Windows operating system."
+  }
+
+  if ($PSVersionTable.PSVersion.Major -lt 5) {
+    throw "FastLoop installer requires PowerShell 5.1 or newer."
+  }
+}
+
+function Get-RunningAdobeHosts() {
+  $hostProcessNames = @(
+    "Adobe Premiere Pro",
+    "AfterFX",
+    "Adobe After Effects"
+  )
+
+  return @(
+    Get-Process -ErrorAction SilentlyContinue |
+      Where-Object { $hostProcessNames -contains $_.ProcessName } |
+      Select-Object -ExpandProperty ProcessName -Unique
+  )
 }
 
 function Install-Bundle([string]$SourceRoot, [string]$TargetRoot) {
@@ -74,7 +100,17 @@ $script:LastInstallSummary = $null
 $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("FastLoop-Install-" + [Guid]::NewGuid().ToString("N"))
 
 try {
+  Test-PlatformPreflight
   Write-InstallLog -LogPath $installLogPath -Message "Starting FastLoop install $script:FastLoopVersion"
+  Write-InstallLog -LogPath $installLogPath -Message "Install profile: scope=$InstallScope preferAllUsers=$PreferAllUsers allowRunningHosts=$AllowRunningHosts"
+
+  $runningHosts = Get-RunningAdobeHosts
+  if ($runningHosts.Count -gt 0 -and -not $AllowRunningHosts) {
+    throw "Detected running Adobe host process(es): $($runningHosts -join ', '). Close Premiere Pro/After Effects and run installer again, or rerun with -AllowRunningHosts."
+  }
+  if ($runningHosts.Count -gt 0 -and $AllowRunningHosts) {
+    Write-InstallLog -LogPath $installLogPath -Message "Continuing despite running hosts: $($runningHosts -join ', ')"
+  }
 
   if ($PayloadZip) {
     $zipPath = Resolve-FastLoopPath -InputPath $PayloadZip -Fallback "FastLoop-Windows-x64.zip" -ScriptRoot $scriptRoot
@@ -97,7 +133,8 @@ try {
 
   Write-InstallLog -LogPath $installLogPath -Message "Source bundle manifest version $($sourceCheck.ManifestSummary.ExtensionBundleVersion)"
 
-  $targetPlan = Get-FastLoopPreferredInstallTargets -InstallRoot $InstallRoot -InstallScope $InstallScope
+  $effectiveInstallScope = if ($InstallScope -eq "Auto" -and $PreferAllUsers) { "AllUsers" } else { $InstallScope }
+  $targetPlan = Get-FastLoopPreferredInstallTargets -InstallRoot $InstallRoot -InstallScope $effectiveInstallScope
   $primaryTargets = @($targetPlan.PrimaryTargets)
   $secondaryTargets = @($targetPlan.SecondaryTargets)
   if (($primaryTargets.Count + $secondaryTargets.Count) -eq 0) {
@@ -214,11 +251,20 @@ try {
   }
 
   $readyForHosts = (($missingRegistry.Count -eq 0) -and ($installedTargets.Count -gt 0) -and ($systemConflicts.Count -eq 0))
+  $readinessHelperPath = if ($PayloadZip) {
+    Join-Path $tempRoot "Test-FastLoop-HostReadiness.ps1"
+  } else {
+    Resolve-FastLoopPath -InputPath "" -Fallback "Test-FastLoop-HostReadiness.ps1" -ScriptRoot $scriptRoot
+  }
   $summary = [PSCustomObject]@{
     version = $script:FastLoopVersion
     bundleId = $script:FastLoopBundleId
     installedAt = (Get-Date).ToString("o")
     installScope = $InstallScope
+    effectiveInstallScope = $effectiveInstallScope
+    preferAllUsers = [bool]$PreferAllUsers
+    allowRunningHosts = [bool]$AllowRunningHosts
+    runningHostsDetected = @($runningHosts)
     installStrategy = $targetPlan.Strategy
     resolvedRoots = [PSCustomObject]@{
       perUserRoot = $targetPlan.PerUserRoot
@@ -249,6 +295,7 @@ try {
       )
     }
     hostReadiness = @($hostReadiness)
+    packagedReadinessHelperPath = $readinessHelperPath
   }
   $script:LastInstallSummary = $summary
 
@@ -268,6 +315,10 @@ try {
     Write-Host "CurrentUser CEP root was installed successfully."
   }
   Write-Host "Install log: $installLogPath"
+  if (Test-Path -LiteralPath $readinessHelperPath) {
+    Write-Host "Next step: run host diagnostics if needed:"
+    Write-Host "powershell -NoProfile -ExecutionPolicy Bypass -File `"$readinessHelperPath`" -InstallScope $effectiveInstallScope -RegistryBasePath `"$RegistryBasePath`" -LogDirectory `"$logRoot`""
+  }
   exit 0
 } catch {
   $errorMessage = $_.Exception.Message

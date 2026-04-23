@@ -40,6 +40,12 @@ FastLoop now:
 
 If CurrentUser install succeeds but FastLoop still does not appear, the next thing to check is whether an older FastLoop bundle exists under either AllUsers CEP root.
 
+If your environment consistently favors system CEP roots, reinstall with `-PreferAllUsers`:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Install-FastLoop.ps1 -PreferAllUsers
+```
+
 ## Built-In Readiness Check
 
 Run the packaged helper after install:
