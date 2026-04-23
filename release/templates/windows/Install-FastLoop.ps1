@@ -395,7 +395,11 @@ try {
     -ManifestSummary $sourceCheck.ManifestSummary `
     -InstalledTargets $installedTargets `
     -DuplicateBundles $duplicateBundles `
-    -UnsignedReady ($missingRegistry.Count -eq 0)
+    -UnsignedReady ($missingRegistry.Count -eq 0) `
+    -ExpectedBundleId $script:FastLoopBundleId
+  $hostLoadErrorSignals = @($hostReadiness | Where-Object { $_.HostLoadEvidence.Status -eq "error-signals" }).Count -gt 0
+  $hostLoadConfirmed = @($hostReadiness | Where-Object { $_.HostLoadConfirmed }).Count -gt 0
+  $hostPreconditionsReady = @($hostReadiness | Where-Object { $_.PreconditionsReady }).Count -gt 0
   $warnings = @()
   if (-not $systemInstalled -and $targetPlan.Strategy -eq "Auto" -and $targetPlan.SystemRoots.Count -gt 0) {
     $warnings += "FastLoop could not install into any AllUsers CEP root. CurrentUser install completed, but some Adobe environments may prefer the system CEP root."
@@ -407,7 +411,8 @@ try {
     $warnings += "No CurrentUser FastLoop install target was completed."
   }
 
-  $readyForHosts = (($missingRegistry.Count -eq 0) -and ($installedTargets.Count -gt 0) -and ($systemConflicts.Count -eq 0))
+  $preconditionsReady = (($missingRegistry.Count -eq 0) -and ($installedTargets.Count -gt 0) -and ($systemConflicts.Count -eq 0))
+  $readyForHosts = ($preconditionsReady -and (-not $hostLoadErrorSignals))
   $readinessHelperPath = if ($PayloadZip) {
     Join-Path $tempRoot "Test-FastLoop-HostReadiness.ps1"
   } else {
@@ -436,6 +441,10 @@ try {
     warnings = @($warnings)
     logPath = $installLogPath
     readiness = [PSCustomObject]@{
+      preconditionsReady = $preconditionsReady
+      hostLoadEvidenceConfirmed = $hostLoadConfirmed
+      hostLoadErrorSignalsDetected = $hostLoadErrorSignals
+      hostPreconditionsReady = $hostPreconditionsReady
       bundleInstalled = ($installedTargets.Count -gt 0)
       unsignedExtensionSupportReady = ($missingRegistry.Count -eq 0)
       currentUserInstalled = $currentInstalled

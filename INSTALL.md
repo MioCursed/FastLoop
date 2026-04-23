@@ -67,6 +67,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\Test-FastLoop-HostReadines
 ```
 
 4. Confirm the readiness report marks Premiere and/or After Effects as likely ready.
+   - Newer reports also split `preconditionsReady` vs `hostLoadEvidenceConfirmed`.
 5. Confirm `manifest.xml` exists in the installed CEP root.
 6. Confirm `PlayerDebugMode` is set to `1` under:
    - `HKEY_CURRENT_USER\Software\Adobe\CSXS.11`
