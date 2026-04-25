@@ -469,7 +469,7 @@ function New-FastLoopHostReadinessReport(
 }
 
 function Get-FastLoopUnsignedExtensionState([string]$RegistryBasePath = "HKCU:\Software\Adobe") {
-  return @(@("11", "12") | ForEach-Object {
+  return @(@("11", "12", "13") | ForEach-Object {
       $csxsVersion = $_
       $keyPath = Join-Path $RegistryBasePath ("CSXS." + $csxsVersion)
       $playerDebugMode = $null
@@ -488,7 +488,7 @@ function Get-FastLoopUnsignedExtensionState([string]$RegistryBasePath = "HKCU:\S
 
 function Enable-FastLoopUnsignedExtensions([string]$RegistryBasePath = "HKCU:\Software\Adobe") {
   $changes = @()
-  foreach ($csxsVersion in @("11", "12")) {
+  foreach ($csxsVersion in @("11", "12", "13")) {
     $keyPath = Join-Path $RegistryBasePath ("CSXS." + $csxsVersion)
     New-Item -Path $keyPath -Force | Out-Null
     New-ItemProperty -LiteralPath $keyPath -Name "PlayerDebugMode" -PropertyType String -Value "1" -Force | Out-Null

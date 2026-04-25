@@ -39,7 +39,7 @@ The zip package is a fallback path. The installer is the primary user-facing met
 ### Notes
 
 - the packaged Windows runtime is included, so the normal release path does not require a manual Python install
-- the current unsigned prerelease install path enables `PlayerDebugMode=1` for `CSXS.11` and `CSXS.12` under `HKEY_CURRENT_USER\Software\Adobe`
+- the current unsigned prerelease install path enables `PlayerDebugMode=1` for `CSXS.11`, `CSXS.12`, and `CSXS.13` under `HKEY_CURRENT_USER\Software\Adobe`
 - exported previews and renders go to the selected export destination when provided
 - if no output folder is chosen in the panel, FastLoop falls back to `.fastloop-output/`
 - the current installer and zip are usable prerelease assets
@@ -65,6 +65,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\Test-FastLoop-HostReadines
 6. Confirm `PlayerDebugMode` is set to `1` under:
    - `HKEY_CURRENT_USER\Software\Adobe\CSXS.11`
    - `HKEY_CURRENT_USER\Software\Adobe\CSXS.12`
+   - `HKEY_CURRENT_USER\Software\Adobe\CSXS.13`
 7. If FastLoop exists only in the CurrentUser CEP root, try an AllUsers install if you have permission.
 8. If the panel is still missing, inspect Adobe CEP logs under `%LOCALAPPDATA%\Temp`.
 

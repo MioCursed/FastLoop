@@ -112,5 +112,5 @@ npm run release:validate
 - The rerank layer is intentionally lightweight and local; it does not replace deterministic scoring.
 - GitHub Releases is the main end-user installation channel.
 - Current assets are installer-ready and release-ready, but still unsigned prerelease assets until signing is added.
-- The unsigned prerelease install path prepares `PlayerDebugMode` for CEP 11 and CEP 12 under the current user profile.
+- The unsigned prerelease install path prepares `PlayerDebugMode` for CEP 11, CEP 12, and CEP 13 under the current user profile.
 - If FastLoop installs but does not appear, use the packaged host-readiness helper and follow `release/TROUBLESHOOTING.md`.

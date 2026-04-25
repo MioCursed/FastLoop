@@ -17,9 +17,10 @@ If FastLoop installs but does not appear in Premiere Pro or After Effects, check
    - `host-index.jsx`
    - `host-premiere\jsx\fastloop_premiere.jsx`
    - `host-aftereffects\jsx\fastloop_aftereffects.jsx`
-5. Confirm unsigned CEP support is enabled in the current-user registry for both:
+5. Confirm unsigned CEP support is enabled in the current-user registry for all required CEP versions:
    - `HKEY_CURRENT_USER\Software\Adobe\CSXS.11\PlayerDebugMode = 1`
    - `HKEY_CURRENT_USER\Software\Adobe\CSXS.12\PlayerDebugMode = 1`
+   - `HKEY_CURRENT_USER\Software\Adobe\CSXS.13\PlayerDebugMode = 1`
 
 ## CurrentUser vs AllUsers CEP Roots
 
@@ -63,7 +64,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\Test-FastLoop-HostReadines
 The helper reports:
 
 - whether the installed FastLoop bundle is complete
-- whether `PlayerDebugMode` is enabled for CEP 11 and CEP 12
+- whether `PlayerDebugMode` is enabled for CEP 11, CEP 12, and CEP 13
 - whether FastLoop was found in CurrentUser and/or AllUsers CEP roots
 - where duplicate FastLoop bundles may exist
 - whether Premiere Pro is likely ready

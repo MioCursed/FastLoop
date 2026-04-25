@@ -10,7 +10,7 @@
 ## Confirmed By Repo Inspection
 
 - `release/templates/windows/Install-FastLoop.ps1` previously installed only to `%AppData%\Adobe\CEP\extensions\FastLoop` and exited success after copy alone.
-- The previous install path did not check `HKEY_CURRENT_USER\Software\Adobe\CSXS.11` or `CSXS.12` for `PlayerDebugMode`.
+- The previous install path did not check `HKEY_CURRENT_USER\Software\Adobe\CSXS.11`, `CSXS.12`, or `CSXS.13` for `PlayerDebugMode`.
 - `panel/CSXS/manifest.xml` was still using `0.1.0` while the release package had moved ahead.
 - The repo had no post-install verifier or troubleshooting path focused on “installed but not visible”.
 - The repo previously defaulted to CurrentUser CEP install without treating higher-priority AllUsers roots as a potential conflict or fallback.

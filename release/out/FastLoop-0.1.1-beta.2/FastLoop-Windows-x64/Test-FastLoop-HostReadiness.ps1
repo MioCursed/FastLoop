@@ -88,6 +88,7 @@ try {
     guidance = @(
       "Restart Premiere Pro or After Effects after install.",
       "Open Window > Extensions (Legacy) > FastLoop on newer Adobe builds.",
+      "Ensure PlayerDebugMode=1 is set under HKCU\Software\Adobe\CSXS.11, CSXS.12, and CSXS.13.",
       "If FastLoop is still missing, inspect CEP logs under %LOCALAPPDATA%\\Temp for CEP*-PPRO.log or CEP*-AEFT.log.",
       "If FastLoop exists only under the CurrentUser CEP root, try an AllUsers install if you have permission."
     )
