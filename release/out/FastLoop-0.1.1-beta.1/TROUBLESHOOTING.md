@@ -17,6 +17,15 @@ If FastLoop installs but does not appear in Premiere Pro or After Effects, check
    - `HKEY_CURRENT_USER\Software\Adobe\CSXS.11\PlayerDebugMode = 1`
    - `HKEY_CURRENT_USER\Software\Adobe\CSXS.12\PlayerDebugMode = 1`
 
+## Installed and validated but not visible
+
+- [ ] Verify manifest `MainPath` and `ScriptPath`.
+- [ ] Confirm CEP paths are root-relative within the bundle.
+- [ ] Verify there is no `../` escape in manifest resource paths.
+- [ ] Verify `host-index.jsx` script loads resolve to existing in-bundle files.
+- [ ] Verify `PlayerDebugMode=1` for `CSXS.11`, `CSXS.12`, and `CSXS.13`.
+- [ ] Check both `Window > Extensions (Legacy)` and `Window > Extensions`.
+
 ## Built-In Readiness Check
 
 Run the packaged helper after install:
