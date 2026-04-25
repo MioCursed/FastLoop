@@ -281,7 +281,7 @@ try {
 
   $sourceCheck = Test-FastLoopBundleContents -BundleRoot $bundleRoot
   if (-not $sourceCheck.IsComplete) {
-    throw "FastLoop bundle is incomplete before install. Missing: $($sourceCheck.MissingPaths -join ', ')"
+    throw "FastLoop bundle is invalid before install. $($sourceCheck.ValidationErrors -join ' ')"
   }
 
   if ($sourceCheck.ManifestSummary.ExtensionBundleId -ne $script:FastLoopBundleId) {
@@ -336,7 +336,7 @@ try {
       Install-Bundle -SourceRoot $bundleRoot -TargetRoot $target.TargetRoot
       $targetCheck = Test-FastLoopBundleContents -BundleRoot $target.TargetRoot
       if (-not $targetCheck.IsComplete) {
-        throw "Installed FastLoop bundle is incomplete at $($target.TargetRoot). Missing: $($targetCheck.MissingPaths -join ', ')"
+        throw "Installed FastLoop bundle is invalid at $($target.TargetRoot). $($targetCheck.ValidationErrors -join ' ')"
       }
 
       $verificationPath = Join-Path $target.TargetRoot "install-verification.json"

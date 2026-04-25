@@ -60,6 +60,67 @@ function Get-FastLoopManifestSummary([string]$ManifestPath) {
   }
 }
 
+function Resolve-FastLoopManifestResourcePath(
+  [string]$BundleRoot,
+  [string]$ResourcePath
+) {
+  $bundleRootFull = [System.IO.Path]::GetFullPath($BundleRoot)
+  $bundleRootPrefix = $bundleRootFull.TrimEnd('\', '/') + [System.IO.Path]::DirectorySeparatorChar
+  $resourceValue = if ($ResourcePath) { [string]$ResourcePath } else { "" }
+  $resolvedPath = $null
+  $pathEscapesBundle = $false
+
+  if ($resourceValue.Trim()) {
+    if ([System.IO.Path]::IsPathRooted($resourceValue)) {
+      $resolvedPath = [System.IO.Path]::GetFullPath($resourceValue)
+    } else {
+      $relativePath = $resourceValue.TrimStart('\', '/')
+      $resolvedPath = [System.IO.Path]::GetFullPath((Join-Path $bundleRootFull $relativePath))
+    }
+
+    if (($resolvedPath -ne $bundleRootFull) -and (-not $resolvedPath.StartsWith($bundleRootPrefix, [System.StringComparison]::OrdinalIgnoreCase))) {
+      $pathEscapesBundle = $true
+    }
+  }
+
+  $exists = $false
+  if ($resolvedPath -and -not $pathEscapesBundle) {
+    $exists = Test-Path -LiteralPath $resolvedPath
+  }
+
+  return [PSCustomObject]@{
+    Value = $resourceValue
+    ResolvedPath = $resolvedPath
+    PathEscapesBundle = $pathEscapesBundle
+    Exists = $exists
+  }
+}
+
+function Get-FastLoopBundleValidationErrors([object]$BundleCheck) {
+  $errors = @()
+
+  if (@($BundleCheck.MissingPaths).Count -gt 0) {
+    $errors += "Missing required paths: $($BundleCheck.MissingPaths -join ', ')"
+  }
+  if ($BundleCheck.ManifestPathEscapesBundle) {
+    $errors += "Manifest resource path escapes bundle root."
+  }
+  if ($BundleCheck.ManifestMainPathEscapesBundle) {
+    $errors += "Manifest MainPath resolves outside bundle root: $($BundleCheck.ManifestSummary.MainPath)"
+  }
+  if ($BundleCheck.ManifestScriptPathEscapesBundle) {
+    $errors += "Manifest ScriptPath resolves outside bundle root: $($BundleCheck.ManifestSummary.ScriptPath)"
+  }
+  if ($BundleCheck.ResolvedMainPathMissing) {
+    $errors += "Resolved MainPath missing: $($BundleCheck.ResolvedMainPath)"
+  }
+  if ($BundleCheck.ResolvedScriptPathMissing) {
+    $errors += "Resolved ScriptPath missing: $($BundleCheck.ResolvedScriptPath)"
+  }
+
+  return @($errors)
+}
+
 function Test-FastLoopBundleContents([string]$BundleRoot) {
   $requiredPaths = @(
     "CSXS\manifest.xml",
@@ -80,17 +141,50 @@ function Test-FastLoopBundleContents([string]$BundleRoot) {
 
   $manifestPath = Join-Path $BundleRoot "CSXS\manifest.xml"
   $manifestSummary = $null
+  $manifestMainPath = $null
+  $manifestScriptPath = $null
+  $manifestMainPathEscapesBundle = $false
+  $manifestScriptPathEscapesBundle = $false
+  $resolvedMainPathMissing = $false
+  $resolvedScriptPathMissing = $false
   if (Test-Path -LiteralPath $manifestPath) {
     $manifestSummary = Get-FastLoopManifestSummary -ManifestPath $manifestPath
+    $mainPathResolution = Resolve-FastLoopManifestResourcePath -BundleRoot $BundleRoot -ResourcePath $manifestSummary.MainPath
+    $scriptPathResolution = Resolve-FastLoopManifestResourcePath -BundleRoot $BundleRoot -ResourcePath $manifestSummary.ScriptPath
+
+    $manifestMainPath = $mainPathResolution.ResolvedPath
+    $manifestScriptPath = $scriptPathResolution.ResolvedPath
+    $manifestMainPathEscapesBundle = [bool]$mainPathResolution.PathEscapesBundle
+    $manifestScriptPathEscapesBundle = [bool]$scriptPathResolution.PathEscapesBundle
+    $resolvedMainPathMissing = (-not $manifestMainPathEscapesBundle) -and (-not $mainPathResolution.Exists)
+    $resolvedScriptPathMissing = (-not $manifestScriptPathEscapesBundle) -and (-not $scriptPathResolution.Exists)
   }
 
-  return [PSCustomObject]@{
+  $manifestPathEscapesBundle = $manifestMainPathEscapesBundle -or $manifestScriptPathEscapesBundle
+  $isComplete = (
+    ($missingPaths.Count -eq 0) -and
+    (-not $manifestPathEscapesBundle) -and
+    (-not $resolvedMainPathMissing) -and
+    (-not $resolvedScriptPathMissing)
+  )
+
+  $result = [PSCustomObject]@{
     BundleRoot = $BundleRoot
-    IsComplete = ($missingPaths.Count -eq 0)
+    IsComplete = $isComplete
     MissingPaths = $missingPaths
     ManifestPath = $manifestPath
     ManifestSummary = $manifestSummary
+    ManifestPathEscapesBundle = $manifestPathEscapesBundle
+    ManifestMainPathEscapesBundle = $manifestMainPathEscapesBundle
+    ManifestScriptPathEscapesBundle = $manifestScriptPathEscapesBundle
+    ResolvedMainPath = $manifestMainPath
+    ResolvedScriptPath = $manifestScriptPath
+    ResolvedMainPathMissing = $resolvedMainPathMissing
+    ResolvedScriptPathMissing = $resolvedScriptPathMissing
   }
+  $result | Add-Member -NotePropertyName ValidationErrors -NotePropertyValue (Get-FastLoopBundleValidationErrors -BundleCheck $result)
+
+  return $result
 }
 
 function Get-FastLoopKnownCepRoots([string]$InstallRoot = "", [string]$InstallScope = "CurrentUser") {
