@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { cp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { cp, mkdir, open, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
@@ -85,6 +85,7 @@ async function runPowerShellWithRetries(command, retries = 5, waitMs = 750) {
       if (attempt === retries) {
         throw lastError;
       }
+      console.warn(`PowerShell command failed on attempt ${attempt}/${retries}. Retrying in ${waitMs}ms.`);
       await delay(waitMs);
     }
   }
@@ -101,6 +102,45 @@ async function removeWithRetries(targetPath, retries = 8, waitMs = 750) {
       if (attempt === retries) {
         throw lastError;
       }
+      await delay(waitMs);
+    }
+  }
+}
+
+async function collectFiles(root, current = root) {
+  const entries = await readdir(current, { withFileTypes: true });
+  const files = [];
+  for (const entry of entries) {
+    const absolutePath = path.join(current, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...await collectFiles(root, absolutePath));
+    } else {
+      files.push(absolutePath);
+    }
+  }
+  return files;
+}
+
+async function assertFileReadable(filePath) {
+  const handle = await open(filePath, "r");
+  await handle.close();
+}
+
+async function waitForReadableTree(root, retries = 30, waitMs = 2000) {
+  let lastError;
+  for (let attempt = 1; attempt <= retries; attempt += 1) {
+    try {
+      const files = await collectFiles(root);
+      for (const filePath of files) {
+        await assertFileReadable(filePath);
+      }
+      return;
+    } catch (error) {
+      lastError = error;
+      if (attempt === retries) {
+        throw lastError;
+      }
+      console.warn(`Waiting for release files to become readable (${attempt}/${retries}): ${error.message}`);
       await delay(waitMs);
     }
   }
@@ -224,7 +264,12 @@ await cp(path.join(workspaceRoot, "release", "SIGNING.md"), path.join(releaseRoo
 await cp(path.join(workspaceRoot, "release", "signing.env.example"), path.join(releaseRoot, "signing.env.example"));
 await cp(licenseTermsPath, path.join(releaseRoot, "LICENSE-TERMS.txt"));
 
-await runPowerShellWithRetries(`Compress-Archive -Path '${portableRoot}\\*' -DestinationPath '${portableZipPath}' -Force`);
+await waitForReadableTree(portableRoot);
+await runPowerShellWithRetries(
+  `Compress-Archive -Path '${portableRoot}\\*' -DestinationPath '${portableZipPath}' -Force`,
+  12,
+  5000
+);
 
 await cp(path.join(portableRoot, "Install-FastLoop.ps1"), path.join(installerStageRoot, "Install-FastLoop.ps1"));
 await cp(path.join(portableRoot, "FastLoop-CEPCommon.ps1"), path.join(installerStageRoot, "FastLoop-CEPCommon.ps1"));
