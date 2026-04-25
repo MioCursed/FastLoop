@@ -26,6 +26,19 @@ function readAttribute(source, pattern, label) {
 const manifestPath = path.join(workspaceRoot, "panel", "CSXS", "manifest.xml");
 const manifestXml = await readFile(manifestPath, "utf8");
 const normalizedVersion = toCepManifestVersion(packageJson.version ?? "0.0.0");
+const bundleRoot = path.resolve(workspaceRoot, "panel");
+
+function assertInsideBundle(label, resolvedPath) {
+  if (resolvedPath !== bundleRoot && !resolvedPath.startsWith(`${bundleRoot}${path.sep}`)) {
+    throw new Error(`${label} resolves outside bundle root: ${resolvedPath}`);
+  }
+}
+
+function resolveBundlePath(label, relativePath) {
+  const resolvedPath = path.resolve(bundleRoot, relativePath);
+  assertInsideBundle(label, resolvedPath);
+  return resolvedPath;
+}
 
 const extensionBundleId = readAttribute(manifestXml, /ExtensionBundleId="([^"]+)"/, "ExtensionBundleId");
 const extensionBundleVersion = readAttribute(
@@ -64,8 +77,16 @@ for (const hostName of ["PPRO", "AEFT"]) {
   }
 }
 
-if (!manifestXml.includes('<RequiredRuntime Name="CSXS" Version="[11.0,99.9]" />')) {
-  throw new Error("Manifest no longer declares the expected CEP runtime range (11.0+).");
+const csxsRuntimeVersion = readAttribute(
+  manifestXml,
+  /<RequiredRuntime Name="CSXS" Version="([^"]+)"\s*\/>/,
+  "RequiredRuntime CSXS Version"
+);
+const allowedRuntimeVersions = new Set(["11.0", "[11.0,99.9]"]);
+if (!allowedRuntimeVersions.has(csxsRuntimeVersion)) {
+  throw new Error(
+    `Manifest CSXS runtime version must match final policy (${Array.from(allowedRuntimeVersions).join(" or ")}), got ${csxsRuntimeVersion}.`
+  );
 }
 
 for (const relativePath of [
@@ -77,12 +98,43 @@ for (const relativePath of [
   await access(path.join(workspaceRoot, relativePath));
 }
 
-if (mainPath !== "./dist/index.html") {
-  throw new Error(`Unexpected MainPath: ${mainPath}`);
+const resolvedMainPath = resolveBundlePath("MainPath", mainPath);
+const resolvedScriptPath = resolveBundlePath("ScriptPath", scriptPath);
+const expectedMainPath = path.join(bundleRoot, "dist", "index.html");
+const expectedScriptPath = path.join(bundleRoot, "host-index.jsx");
+
+if (resolvedMainPath !== expectedMainPath) {
+  throw new Error(`MainPath must resolve to panel/dist/index.html, got: ${mainPath} -> ${resolvedMainPath}`);
 }
 
-if (scriptPath !== "./host-index.jsx") {
-  throw new Error(`Unexpected ScriptPath: ${scriptPath}`);
+if (resolvedScriptPath !== expectedScriptPath) {
+  throw new Error(`ScriptPath must resolve to panel/host-index.jsx, got: ${scriptPath} -> ${resolvedScriptPath}`);
+}
+
+for (const [label, target] of [
+  ["MainPath target", resolvedMainPath],
+  ["ScriptPath target", resolvedScriptPath]
+]) {
+  try {
+    await access(target);
+  } catch {
+    throw new Error(`${label} does not exist: ${target}`);
+  }
+}
+
+const hostIndexSource = await readFile(expectedScriptPath, "utf8");
+const loadHostScriptTargets = Array.from(
+  hostIndexSource.matchAll(/loadHostScript\(\s*["']([^"']+)["']\s*\)/g),
+  (match) => match[1]
+);
+
+for (const target of loadHostScriptTargets) {
+  const resolvedTarget = resolveBundlePath(`loadHostScript(${target})`, target);
+  try {
+    await access(resolvedTarget);
+  } catch {
+    throw new Error(`loadHostScript target does not exist: ${target} -> ${resolvedTarget}`);
+  }
 }
 
 if (menuLabel !== "FastLoop") {
@@ -96,7 +148,11 @@ console.log(
       normalizedManifestVersion: normalizedVersion,
       extensionBundleId,
       mainPath,
+      resolvedMainPath,
       scriptPath,
+      resolvedScriptPath,
+      csxsRuntimeVersion,
+      loadHostScriptTargets,
       menuLabel
     },
     null,
