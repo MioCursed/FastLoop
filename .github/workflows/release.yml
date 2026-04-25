@@ -91,6 +91,30 @@ jobs:
             Write-Host "No signing secrets configured. Publishing unsigned prerelease assets."
           }
 
+      - name: Remove existing release for this tag
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.version.outputs.release_tag }}
+        run: |
+          $headers = @{
+            Authorization = "Bearer $env:GITHUB_TOKEN"
+            Accept = "application/vnd.github+json"
+            "X-GitHub-Api-Version" = "2022-11-28"
+          }
+          $releases = Invoke-RestMethod `
+            -Uri "https://api.github.com/repos/${{ github.repository }}/releases?per_page=100" `
+            -Headers $headers
+          $matchingReleases = @($releases | Where-Object { $_.tag_name -eq $env:RELEASE_TAG })
+          foreach ($release in $matchingReleases) {
+            Write-Host "Deleting existing release id=$($release.id) for tag $env:RELEASE_TAG before publishing fresh assets."
+            Invoke-RestMethod `
+              -Method Delete `
+              -Uri "https://api.github.com/repos/${{ github.repository }}/releases/$($release.id)" `
+              -Headers $headers | Out-Null
+          }
+
       - name: Upload release artifacts to workflow run
         uses: actions/upload-artifact@v4
         with:
