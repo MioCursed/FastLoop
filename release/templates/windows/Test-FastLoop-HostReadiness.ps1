@@ -40,6 +40,14 @@ try {
         Exists = (Test-Path -LiteralPath $_.TargetRoot)
         IsComplete = $check.IsComplete
         MissingPaths = $check.MissingPaths
+        ValidationErrors = $check.ValidationErrors
+        ManifestPathEscapesBundle = $check.ManifestPathEscapesBundle
+        ManifestMainPathEscapesBundle = $check.ManifestMainPathEscapesBundle
+        ManifestScriptPathEscapesBundle = $check.ManifestScriptPathEscapesBundle
+        ResolvedMainPath = $check.ResolvedMainPath
+        ResolvedScriptPath = $check.ResolvedScriptPath
+        ResolvedMainPathMissing = $check.ResolvedMainPathMissing
+        ResolvedScriptPathMissing = $check.ResolvedScriptPathMissing
         ManifestSummary = $check.ManifestSummary
       }
     })
@@ -102,7 +110,8 @@ try {
       "Restart Premiere Pro or After Effects after install.",
       "Open Window > Extensions (Legacy) > FastLoop on newer Adobe builds.",
       "If FastLoop is still missing, inspect CEP logs under %LOCALAPPDATA%\\Temp for CEP*-PPRO.log or CEP*-AEFT.log.",
-      "If FastLoop exists only under the CurrentUser CEP root, try an AllUsers install if you have permission."
+      "If FastLoop exists only under the CurrentUser CEP root, try an AllUsers install if you have permission.",
+      "If installTargets[].ValidationErrors is non-empty, fix manifest MainPath/ScriptPath so they resolve inside the bundle and point to existing files."
     )
   }
 
