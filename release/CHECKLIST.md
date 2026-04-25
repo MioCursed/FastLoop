@@ -22,8 +22,11 @@
    `SHA256SUMS.txt`
    `release-notes.md`
    `release-manifest.json`
-18. Confirm a failed setup writes `%LOCALAPPDATA%\FastLoop\Logs\setup-latest.log`, `setup-latest.json`, `setup-helper-stdout.log`, and `setup-helper-stderr.log`.
-19. Confirm the portable fallback zip and `Install-FastLoop.cmd` are present in both the release zip and setup payload.
-20. Publish the generated assets to GitHub Releases with tag `v<package.version>`.
-21. Use release title `FastLoop v<package.version> Prerelease`.
-22. Add real signing in the next production-release stage when certificate material is available.
+18. Run `npm run installer:validate`.
+19. Confirm a failed setup writes `%LOCALAPPDATA%\FastLoop\Logs\setup-latest.log`, `setup-latest.json`, `setup-helper-stdout.log`, and `setup-helper-stderr.log`.
+20. Confirm PowerShell preflight logs are written to `setup-powershell-preflight-stdout.log` and `setup-powershell-preflight-stderr.log`.
+21. Confirm the generated setup executable was smoke-tested, not only `Install-FastLoop.ps1`.
+22. Confirm the portable fallback zip and `Install-FastLoop.cmd` are present in both the release zip and setup payload.
+23. Publish the generated assets to GitHub Releases with tag `v<package.version>`.
+24. Use release title `FastLoop v<package.version> Prerelease`.
+25. Add real signing in the next production-release stage when certificate material is available.

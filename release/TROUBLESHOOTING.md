@@ -60,6 +60,29 @@ After a fallback install, restart the Adobe host and check both menu paths:
 - `Window > Extensions (Legacy) > FastLoop`
 - `Window > Extensions > FastLoop`
 
+## Installer fails with PowerShell failed / exit code -196608
+
+If setup reports `PowerShell failed while running the install helper` or exit code `-196608`, inspect the wrapper logs first:
+
+1. Open `%LOCALAPPDATA%\FastLoop\Logs\setup-latest.log`.
+2. Check `%LOCALAPPDATA%\FastLoop\Logs\setup-latest.json`.
+3. Check `%LOCALAPPDATA%\FastLoop\Logs\setup-helper-stdout.log`.
+4. Check `%LOCALAPPDATA%\FastLoop\Logs\setup-helper-stderr.log`.
+5. If present, check `%LOCALAPPDATA%\FastLoop\Logs\install-latest.log` and `install-latest.json`.
+
+The setup wrapper also runs a PowerShell preflight and records:
+
+- `%LOCALAPPDATA%\FastLoop\Logs\setup-powershell-preflight-stdout.log`
+- `%LOCALAPPDATA%\FastLoop\Logs\setup-powershell-preflight-stderr.log`
+
+To recover:
+
+1. Open `%LOCALAPPDATA%\FastLoop\Recovery\FastLoop-Windows-x64.zip`.
+2. Extract the zip.
+3. Run `Install-FastLoop.cmd`.
+4. Keep Premiere Pro and After Effects closed while installing.
+5. Run the setup wizard as administrator only if your Adobe environment requires AllUsers CEP roots.
+
 ## Installed and validated but not visible
 
 If the installer reports success but Premiere Pro still does not show FastLoop, treat it as a CEP load problem first.

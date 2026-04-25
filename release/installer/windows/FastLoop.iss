@@ -61,7 +61,7 @@ english.ReadyMemoUnsigned=Unsigned prerelease support:
 english.UnsignedEnabled=Enable PlayerDebugMode for CEP CSXS.11, CSXS.12, and CSXS.13
 english.UnsignedDisabled=Do not change PlayerDebugMode
 english.InstallFailedTitle=FastLoop installation failed
-english.InstallFailed=FastLoop setup could not complete because {0}.%n%nOpen %LOCALAPPDATA%\FastLoop\Logs\setup-latest.log for details.%nYou can also extract FastLoop-Windows-x64.zip and run Install-FastLoop.cmd.
+english.InstallFailed=FastLoop setup could not complete because %1.%n%nOpen {localappdata}\FastLoop\Logs\setup-latest.log for details.%nYou can also extract the recovery zip and run Install-FastLoop.cmd.
 english.FinishInfo=Open FastLoop from Premiere Pro or After Effects:%n%nWindow > Extensions (Legacy) > FastLoop%nWindow > Extensions > FastLoop%n%nFastLoop is a CEP extension, not a standalone desktop app.
 english.RunReadiness=Run FastLoop readiness check now
 english.OpenGuide=Open FastLoop install guide
@@ -76,7 +76,7 @@ brazilianportuguese.ReadyMemoUnsigned=Suporte a prerelease nao assinado:
 brazilianportuguese.UnsignedEnabled=Ativar PlayerDebugMode para CEP CSXS.11, CSXS.12 e CSXS.13
 brazilianportuguese.UnsignedDisabled=Nao alterar PlayerDebugMode
 brazilianportuguese.InstallFailedTitle=A instalacao do FastLoop falhou
-brazilianportuguese.InstallFailed=O instalador do FastLoop nao conseguiu concluir porque {0}.%n%nAbra %LOCALAPPDATA%\FastLoop\Logs\setup-latest.log para detalhes.%nVoce tambem pode extrair FastLoop-Windows-x64.zip e executar Install-FastLoop.cmd.
+brazilianportuguese.InstallFailed=O instalador do FastLoop nao conseguiu concluir porque %1.%n%nAbra {localappdata}\FastLoop\Logs\setup-latest.log para detalhes.%nVoce tambem pode extrair o zip de recuperacao e executar Install-FastLoop.cmd.
 brazilianportuguese.FinishInfo=Abra o FastLoop pelo Premiere Pro ou After Effects:%n%nWindow > Extensions (Legacy) > FastLoop%nWindow > Extensions > FastLoop%n%nFastLoop e uma extensao CEP, nao um aplicativo desktop independente.
 brazilianportuguese.RunReadiness=Executar verificacao de prontidao do FastLoop agora
 brazilianportuguese.OpenGuide=Abrir guia de instalacao do FastLoop
@@ -141,6 +141,26 @@ end;
 function HelperStderrPath(): String;
 begin
   Result := SetupLogDirectory() + '\setup-helper-stderr.log';
+end;
+
+function PowerShellPreflightStdoutPath(): String;
+begin
+  Result := SetupLogDirectory() + '\setup-powershell-preflight-stdout.log';
+end;
+
+function PowerShellPreflightStderrPath(): String;
+begin
+  Result := SetupLogDirectory() + '\setup-powershell-preflight-stderr.log';
+end;
+
+function PowerShellPreflightCmdPath(): String;
+begin
+  Result := SetupLogDirectory() + '\setup-powershell-preflight.cmd';
+end;
+
+function HelperCmdPath(): String;
+begin
+  Result := SetupLogDirectory() + '\setup-run-helper.cmd';
 end;
 
 function RecoveryZipPath(): String;
@@ -219,6 +239,14 @@ begin
     Result := 'false';
 end;
 
+function PowerShellBoolValue(Value: Boolean): String;
+begin
+  if Value then
+    Result := '1'
+  else
+    Result := '0';
+end;
+
 function SelectedInstallScope(): String;
 begin
   if WizardIsTaskSelected('preferallusers') then
@@ -227,25 +255,24 @@ begin
     Result := 'CurrentUser';
 end;
 
-function PowerShellQuote(Value: String): String;
-begin
-  StringChangeEx(Value, '''', '''''', True);
-  Result := '''' + Value + '''';
-end;
-
-function CmdQuote(Value: String): String;
+function WindowsArgQuote(Value: String): String;
 begin
   StringChangeEx(Value, '"', '\"', True);
   Result := '"' + Value + '"';
+end;
+
+function PowerShellExecutable(): String;
+begin
+  Result := 'powershell.exe';
 end;
 
 function BuildInstallArgs(): String;
 begin
   Result :=
     '-NoProfile -ExecutionPolicy Bypass -File ' +
-    PowerShellQuote(ExpandConstant('{app}\Payload\Install-FastLoop.ps1')) +
+    WindowsArgQuote(ExpandConstant('{app}\Payload\Install-FastLoop.ps1')) +
     ' -PayloadZip ' +
-    PowerShellQuote(ExpandConstant('{app}\Payload\FastLoop-Windows-x64.zip'));
+    WindowsArgQuote(ExpandConstant('{app}\Payload\FastLoop-Windows-x64.zip'));
 
   if WizardIsTaskSelected('preferallusers') then
     Result := Result + ' -InstallScope Auto'
@@ -254,9 +281,9 @@ begin
 
   Result := Result +
     ' -LogDirectory ' +
-    PowerShellQuote(ExpandConstant('{localappdata}\FastLoop\Logs')) +
+    WindowsArgQuote(ExpandConstant('{localappdata}\FastLoop\Logs')) +
     ' -EnableUnsignedPanelSupport ' +
-    BoolArg(WizardIsTaskSelected('unsigned'));
+    PowerShellBoolValue(WizardIsTaskSelected('unsigned'));
 
   if WizardIsTaskSelected('preferallusers') then
     Result := Result + ' -PreferAllUsers';
@@ -264,17 +291,46 @@ end;
 
 function BuildInstallCommandForLog(): String;
 begin
-  Result := 'powershell.exe ' + BuildInstallArgs();
+  Result := WindowsArgQuote(PowerShellExecutable()) + ' ' + BuildInstallArgs();
 end;
 
-function BuildInstallCmdArgs(): String;
+function BuildPowerShellPreflightCommandForLog(): String;
 begin
-  Result :=
-    '/S /C ""powershell.exe" ' +
-    BuildInstallArgs() +
-    ' 1> ' + CmdQuote(HelperStdoutPath()) +
-    ' 2> ' + CmdQuote(HelperStderrPath()) +
-    '"';
+  Result := WindowsArgQuote(PowerShellExecutable()) +
+    ' -NoProfile -ExecutionPolicy Bypass -Command ' +
+    WindowsArgQuote('$PSVersionTable.PSVersion.ToString()');
+end;
+
+function BuildCmdRunScriptArgs(ScriptPath: String): String;
+begin
+  Result := '/D /C call ' + WindowsArgQuote(ScriptPath);
+end;
+
+procedure WriteCommandScript(Path: String; CommandLine: String; StdoutPath: String; StderrPath: String);
+var
+  Content: String;
+begin
+  Content :=
+    '@echo off' + #13#10 +
+    'cd /d ' + WindowsArgQuote(ExpandConstant('{app}\Payload')) + #13#10 +
+    CommandLine + ' 1> ' + WindowsArgQuote(StdoutPath) + ' 2> ' + WindowsArgQuote(StderrPath) + #13#10 +
+    'exit /b %ERRORLEVEL%' + #13#10;
+  SaveStringToFile(Path, Content, False);
+end;
+
+procedure WriteHelperCommandScript();
+begin
+  WriteCommandScript(HelperCmdPath(), BuildInstallCommandForLog(), HelperStdoutPath(), HelperStderrPath());
+end;
+
+procedure WritePowerShellPreflightScript();
+begin
+  WriteCommandScript(
+    PowerShellPreflightCmdPath(),
+    BuildPowerShellPreflightCommandForLog(),
+    PowerShellPreflightStdoutPath(),
+    PowerShellPreflightStderrPath()
+  );
 end;
 
 function NormalizeExitCode(ResultCode: Integer): String;
@@ -290,12 +346,16 @@ var
   PayloadZip: String;
   HelperScript: String;
   HelperCmd: String;
+  CommonScript: String;
+  ReadinessScript: String;
   StderrSnippet: String;
   StdoutSnippet: String;
 begin
   PayloadZip := ExpandConstant('{app}\Payload\FastLoop-Windows-x64.zip');
   HelperScript := ExpandConstant('{app}\Payload\Install-FastLoop.ps1');
   HelperCmd := ExpandConstant('{app}\Payload\Install-FastLoop.cmd');
+  CommonScript := ExpandConstant('{app}\Payload\FastLoop-CEPCommon.ps1');
+  ReadinessScript := ExpandConstant('{app}\Payload\Test-FastLoop-HostReadiness.ps1');
   StderrSnippet := Lowercase(ReadTextSnippet(HelperStderrPath(), 4000));
   StdoutSnippet := Lowercase(ReadTextSnippet(HelperStdoutPath(), 4000));
 
@@ -305,6 +365,12 @@ begin
     Result := 'the install helper script is missing'
   else if not FileExists(HelperCmd) then
     Result := 'the portable install command is missing'
+  else if not FileExists(CommonScript) then
+    Result := 'the shared CEP helper script is missing'
+  else if not FileExists(ReadinessScript) then
+    Result := 'the host readiness helper script is missing'
+  else if (Pos('cannot process the command', StderrSnippet) > 0) or (Pos('argument transformation', StderrSnippet) > 0) or (Pos('term is not recognized', StderrSnippet) > 0) or (Pos('unexpected token', StderrSnippet) > 0) then
+    Result := 'the PowerShell command line was malformed'
   else if Pos('expand-archive', StderrSnippet) > 0 then
     Result := 'the bundled payload could not be extracted'
   else if (Pos('playerdebugmode', StderrSnippet) > 0) or (Pos('registry', StderrSnippet) > 0) then
@@ -313,6 +379,8 @@ begin
     Result := 'a CEP install target was not writable'
   else if (Pos('verification', StderrSnippet) > 0) or (Pos('readiness', StderrSnippet) > 0) or (Pos('not reliable', StderrSnippet) > 0) then
     Result := 'post-install verification failed'
+  else if (Pos('is not recognized', StderrSnippet) > 0) and (Pos('powershell', StderrSnippet) > 0) then
+    Result := 'PowerShell executable was not found'
   else if (Pos('powershell', StderrSnippet) > 0) or (Pos('powershell', StdoutSnippet) > 0) or (ResultCode = -196608) then
     Result := 'PowerShell failed while running the install helper'
   else if ResultCode <> 0 then
@@ -321,7 +389,7 @@ begin
     Result := 'an unknown setup wrapper failure occurred';
 end;
 
-procedure WriteSetupSummary(Stage: String; Category: String; ResultCode: Integer);
+procedure WriteSetupSummary(Stage: String; Category: String; ResultCode: Integer; PowerShellPreflightSucceeded: Boolean; PowerShellPreflightExitCode: Integer);
 var
   Json: String;
 begin
@@ -340,10 +408,19 @@ begin
     '  "payloadZipPath": "' + JsonEscape(ExpandConstant('{app}\Payload\FastLoop-Windows-x64.zip')) + '",' + #13#10 +
     '  "installHelperPath": "' + JsonEscape(ExpandConstant('{app}\Payload\Install-FastLoop.ps1')) + '",' + #13#10 +
     '  "installCmdPath": "' + JsonEscape(ExpandConstant('{app}\Payload\Install-FastLoop.cmd')) + '",' + #13#10 +
+    '  "commonHelperPath": "' + JsonEscape(ExpandConstant('{app}\Payload\FastLoop-CEPCommon.ps1')) + '",' + #13#10 +
+    '  "readinessHelperPath": "' + JsonEscape(ExpandConstant('{app}\Payload\Test-FastLoop-HostReadiness.ps1')) + '",' + #13#10 +
     '  "payloadZipExists": ' + FileExistsText(ExpandConstant('{app}\Payload\FastLoop-Windows-x64.zip')) + ',' + #13#10 +
     '  "installHelperExists": ' + FileExistsText(ExpandConstant('{app}\Payload\Install-FastLoop.ps1')) + ',' + #13#10 +
     '  "installCmdExists": ' + FileExistsText(ExpandConstant('{app}\Payload\Install-FastLoop.cmd')) + ',' + #13#10 +
-    '  "powershellPath": "powershell.exe",' + #13#10 +
+    '  "commonHelperExists": ' + FileExistsText(ExpandConstant('{app}\Payload\FastLoop-CEPCommon.ps1')) + ',' + #13#10 +
+    '  "readinessHelperExists": ' + FileExistsText(ExpandConstant('{app}\Payload\Test-FastLoop-HostReadiness.ps1')) + ',' + #13#10 +
+    '  "powershellPath": "' + JsonEscape(PowerShellExecutable()) + '",' + #13#10 +
+    '  "powershellPreflightSucceeded": ' + JsonBool(PowerShellPreflightSucceeded) + ',' + #13#10 +
+    '  "powershellPreflightExitCode": ' + IntToStr(PowerShellPreflightExitCode) + ',' + #13#10 +
+    '  "powershellPreflightCommand": "' + JsonEscape(BuildPowerShellPreflightCommandForLog()) + '",' + #13#10 +
+    '  "helperCommand": "' + JsonEscape(BuildInstallCommandForLog()) + '",' + #13#10 +
+    '  "helperCmdScriptPath": "' + JsonEscape(HelperCmdPath()) + '",' + #13#10 +
     '  "isAdminInstallMode": ' + JsonBool(IsAdminInstallMode()) + ',' + #13#10 +
     '  "username": "' + JsonEscape(GetUserNameString()) + '",' + #13#10 +
     '  "installScope": "' + JsonEscape(SelectedInstallScope()) + '",' + #13#10 +
@@ -351,6 +428,8 @@ begin
     '  "setupLogPath": "' + JsonEscape(SetupLatestLogPath()) + '",' + #13#10 +
     '  "helperStdoutPath": "' + JsonEscape(HelperStdoutPath()) + '",' + #13#10 +
     '  "helperStderrPath": "' + JsonEscape(HelperStderrPath()) + '",' + #13#10 +
+    '  "powershellPreflightStdoutPath": "' + JsonEscape(PowerShellPreflightStdoutPath()) + '",' + #13#10 +
+    '  "powershellPreflightStderrPath": "' + JsonEscape(PowerShellPreflightStderrPath()) + '",' + #13#10 +
     '  "installLatestLogPath": "' + JsonEscape(ExpandConstant('{localappdata}\FastLoop\Logs\install-latest.log')) + '",' + #13#10 +
     '  "installLatestJsonPath": "' + JsonEscape(ExpandConstant('{localappdata}\FastLoop\Logs\install-latest.json')) + '",' + #13#10 +
     '  "recoveryZipPath": "' + JsonEscape(RecoveryZipPath()) + '"' + #13#10 +
@@ -365,6 +444,8 @@ begin
   SaveStringToFile(SetupLatestLogPath(), '', False);
   SaveStringToFile(HelperStdoutPath(), '', False);
   SaveStringToFile(HelperStderrPath(), '', False);
+  SaveStringToFile(PowerShellPreflightStdoutPath(), '', False);
+  SaveStringToFile(PowerShellPreflightStderrPath(), '', False);
   AppendSetupLog('Starting FastLoop setup wrapper {#AppVersion}');
   AppendSetupLog('Installer path: ' + ExpandConstant('{srcexe}'));
   AppendSetupLog('Application directory: ' + ExpandConstant('{app}'));
@@ -372,15 +453,17 @@ begin
   AppendSetupLog('Expected payload zip: ' + ExpandConstant('{app}\Payload\FastLoop-Windows-x64.zip') + ' exists=' + FileExistsText(ExpandConstant('{app}\Payload\FastLoop-Windows-x64.zip')));
   AppendSetupLog('Expected Install-FastLoop.ps1: ' + ExpandConstant('{app}\Payload\Install-FastLoop.ps1') + ' exists=' + FileExistsText(ExpandConstant('{app}\Payload\Install-FastLoop.ps1')));
   AppendSetupLog('Expected Install-FastLoop.cmd: ' + ExpandConstant('{app}\Payload\Install-FastLoop.cmd') + ' exists=' + FileExistsText(ExpandConstant('{app}\Payload\Install-FastLoop.cmd')));
+  AppendSetupLog('Expected FastLoop-CEPCommon.ps1: ' + ExpandConstant('{app}\Payload\FastLoop-CEPCommon.ps1') + ' exists=' + FileExistsText(ExpandConstant('{app}\Payload\FastLoop-CEPCommon.ps1')));
+  AppendSetupLog('Expected Test-FastLoop-HostReadiness.ps1: ' + ExpandConstant('{app}\Payload\Test-FastLoop-HostReadiness.ps1') + ' exists=' + FileExistsText(ExpandConstant('{app}\Payload\Test-FastLoop-HostReadiness.ps1')));
   AppendSetupLog('Log directory writable: ' + DirExistsText(SetupLogDirectory()));
-  AppendSetupLog('PowerShell executable: powershell.exe');
+  AppendSetupLog('PowerShell executable: ' + PowerShellExecutable());
   AppendSetupLog('Admin install mode: ' + BoolArg(IsAdminInstallMode()));
   AppendSetupLog('Current username: ' + GetUserNameString());
   AppendSetupLog('Install scope: ' + SelectedInstallScope());
   AppendSetupLog('Enable unsigned CEP support: ' + BoolArg(WizardIsTaskSelected('unsigned')));
   AppendSetupLog('CEP registry targets: HKCU\Software\Adobe\CSXS.11, CSXS.12, CSXS.13');
-  AppendSetupLog('Portable fallback: extract FastLoop-Windows-x64.zip and run Install-FastLoop.cmd.');
-  WriteSetupSummary('preflight', 'pending', 0);
+  AppendSetupLog('Portable fallback: extract ' + RecoveryZipPath() + ' and run Install-FastLoop.cmd.');
+  WriteSetupSummary('preflight', 'pending', 0, False, -1);
 end;
 
 procedure CopyRecoveryPayload();
@@ -395,7 +478,7 @@ begin
   end;
 end;
 
-procedure FailSetup(Category: String; ResultCode: Integer);
+procedure FailSetup(Category: String; ResultCode: Integer; PowerShellPreflightSucceeded: Boolean; PowerShellPreflightExitCode: Integer);
 var
   StdoutSnippet: String;
   StderrSnippet: String;
@@ -414,14 +497,31 @@ begin
   AppendSetupLog('FastLoop install log should be at ' + ExpandConstant('{localappdata}\FastLoop\Logs\install-latest.log') + ' if the helper started far enough to create it.');
   AppendSetupLog('Fallback: open ' + RecoveryZipPath() + ', extract it, and run Install-FastLoop.cmd. Run this setup as administrator only if your Adobe environment requires AllUsers CEP roots.');
   AppendSetupLog('Close Premiere Pro and After Effects before retrying.');
-  WriteSetupSummary('failed', Category, ResultCode);
+  WriteSetupSummary('failed', Category, ResultCode, PowerShellPreflightSucceeded, PowerShellPreflightExitCode);
   MsgBox(FmtMessage(ExpandConstant('{cm:InstallFailed}'), [Category]), mbCriticalError, MB_OK);
   RaiseException('FastLoop setup failed: ' + Category + ' (exit code ' + IntToStr(ResultCode) + '). See ' + SetupLatestLogPath());
+end;
+
+function RunPowerShellPreflight(var ResultCode: Integer): Boolean;
+begin
+  WritePowerShellPreflightScript();
+  AppendSetupLog('PowerShell preflight command: ' + BuildPowerShellPreflightCommandForLog());
+  AppendSetupLog('PowerShell preflight stdout: ' + PowerShellPreflightStdoutPath());
+  AppendSetupLog('PowerShell preflight stderr: ' + PowerShellPreflightStderrPath());
+  Result := Exec(ExpandConstant('{cmd}'), BuildCmdRunScriptArgs(PowerShellPreflightCmdPath()), ExpandConstant('{app}\Payload'), SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  AppendSetupLog('PowerShell preflight Exec result=' + JsonBool(Result) + ' exitCode=' + IntToStr(ResultCode));
+  if ReadTextSnippet(PowerShellPreflightStdoutPath(), 400) <> '' then
+    AppendSetupLog('PowerShell preflight stdout snippet: ' + ReadTextSnippet(PowerShellPreflightStdoutPath(), 400));
+  if ReadTextSnippet(PowerShellPreflightStderrPath(), 800) <> '' then
+    AppendSetupLog('PowerShell preflight stderr snippet: ' + ReadTextSnippet(PowerShellPreflightStderrPath(), 800));
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   ResultCode: Integer;
+  PreflightResultCode: Integer;
+  PreflightStarted: Boolean;
+  PreflightSucceeded: Boolean;
   Category: String;
 begin
   if CurStep = ssPostInstall then
@@ -430,29 +530,45 @@ begin
     CopyRecoveryPayload();
 
     if not FileExists(ExpandConstant('{app}\Payload\FastLoop-Windows-x64.zip')) then
-      FailSetup('the bundled payload zip is missing', 9001);
+      FailSetup('the bundled payload zip is missing', 9001, False, -1);
 
     if not FileExists(ExpandConstant('{app}\Payload\Install-FastLoop.ps1')) then
-      FailSetup('the install helper script is missing', 9002);
+      FailSetup('the install helper script is missing', 9002, False, -1);
 
     if not FileExists(ExpandConstant('{app}\Payload\Install-FastLoop.cmd')) then
-      FailSetup('the portable install command is missing', 9003);
+      FailSetup('the portable install command is missing', 9003, False, -1);
+
+    if not FileExists(ExpandConstant('{app}\Payload\FastLoop-CEPCommon.ps1')) then
+      FailSetup('the shared CEP helper script is missing', 9005, False, -1);
+
+    if not FileExists(ExpandConstant('{app}\Payload\Test-FastLoop-HostReadiness.ps1')) then
+      FailSetup('the host readiness helper script is missing', 9006, False, -1);
+
+    PreflightStarted := RunPowerShellPreflight(PreflightResultCode);
+    PreflightSucceeded := PreflightStarted and (PreflightResultCode = 0);
+    if not PreflightStarted then
+      FailSetup('PowerShell executable was not found or could not be started', 9004, False, PreflightResultCode);
+
+    if not PreflightSucceeded then
+      FailSetup('PowerShell preflight failed', PreflightResultCode, False, PreflightResultCode);
 
     AppendSetupLog('Executing helper command: ' + BuildInstallCommandForLog());
     AppendSetupLog('Helper stdout: ' + HelperStdoutPath());
     AppendSetupLog('Helper stderr: ' + HelperStderrPath());
+    WriteHelperCommandScript();
+    AppendSetupLog('Helper command script: ' + HelperCmdPath());
 
-    if not Exec(ExpandConstant('{cmd}'), BuildInstallCmdArgs(), ExpandConstant('{app}\Payload'), SW_HIDE, ewWaitUntilTerminated, ResultCode) then
-      FailSetup('PowerShell could not be started for FastLoop installation', 9004);
+    if not Exec(ExpandConstant('{cmd}'), BuildCmdRunScriptArgs(HelperCmdPath()), ExpandConstant('{app}\Payload'), SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+      FailSetup('PowerShell could not be started for FastLoop installation', 9004, PreflightSucceeded, PreflightResultCode);
 
     if ResultCode <> 0 then
     begin
       Category := DetectFailureCategory(ResultCode);
-      FailSetup(Category, ResultCode);
+      FailSetup(Category, ResultCode, PreflightSucceeded, PreflightResultCode);
     end;
 
     AppendSetupLog('FastLoop install helper completed successfully.');
-    WriteSetupSummary('succeeded', 'success', 0);
+    WriteSetupSummary('succeeded', 'success', 0, PreflightSucceeded, PreflightResultCode);
   end;
 end;
 

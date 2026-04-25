@@ -7,7 +7,7 @@ param(
   [switch]$UseInstallerPanel,
   [switch]$PreferAllUsers,
   [switch]$AllowRunningHosts,
-  [bool]$EnableUnsignedPanelSupport = $true,
+  [object]$EnableUnsignedPanelSupport = $true,
   [string]$RegistryBasePath = "HKCU:\Software\Adobe",
   [string]$LogDirectory = ""
 )
@@ -98,6 +98,26 @@ function Get-InstallFailureCategory([string]$Message) {
     return "adobe-hosts-running"
   }
   return "unknown-install-helper-failure"
+}
+
+function Convert-FastLoopBoolean([object]$Value, [bool]$DefaultValue = $true) {
+  if ($null -eq $Value) {
+    return $DefaultValue
+  }
+
+  if ($Value -is [bool]) {
+    return [bool]$Value
+  }
+
+  $text = ([string]$Value).Trim().ToLowerInvariant()
+  if ($text -in @("1", "true", "`$true", "yes", "y", "on")) {
+    return $true
+  }
+  if ($text -in @("0", "false", "`$false", "no", "n", "off")) {
+    return $false
+  }
+
+  return [System.Convert]::ToBoolean($Value)
 }
 
 function Show-FastLoopInstallerPanel(
@@ -291,6 +311,7 @@ $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("FastLoop-Install-" + [
 
 try {
   Test-PlatformPreflight
+  $EnableUnsignedPanelSupport = Convert-FastLoopBoolean -Value $EnableUnsignedPanelSupport -DefaultValue $true
 
   if ($UseInstallerPanel) {
     $panelSelection = Show-FastLoopInstallerPanel `

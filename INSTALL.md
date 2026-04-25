@@ -77,6 +77,28 @@ Fallback steps:
 4. Run the setup wizard as administrator only when you need AllUsers CEP roots under `Program Files`.
 5. After install, check `Window > Extensions (Legacy) > FastLoop`, then `Window > Extensions > FastLoop`.
 
+### Installer Fails With PowerShell / Exit Code -196608
+
+If setup reports `PowerShell failed while running the install helper` or exit code `-196608`, open:
+
+- `%LOCALAPPDATA%\FastLoop\Logs\setup-latest.log`
+
+Also check:
+
+- `%LOCALAPPDATA%\FastLoop\Logs\setup-latest.json`
+- `%LOCALAPPDATA%\FastLoop\Logs\setup-helper-stdout.log`
+- `%LOCALAPPDATA%\FastLoop\Logs\setup-helper-stderr.log`
+- `%LOCALAPPDATA%\FastLoop\Logs\install-latest.log`
+- `%LOCALAPPDATA%\FastLoop\Logs\install-latest.json`
+
+Use the recovery zip if setup cannot complete:
+
+1. Open `%LOCALAPPDATA%\FastLoop\Recovery\FastLoop-Windows-x64.zip`.
+2. Extract it.
+3. Run `Install-FastLoop.cmd`.
+4. Close Premiere Pro and After Effects before retrying.
+5. Run the setup wizard as administrator only if your Adobe environment requires AllUsers CEP roots.
+
 ### Open FastLoop
 
 After installing, restart Premiere Pro or After Effects and use one of these menu paths:

@@ -45,10 +45,14 @@ for (const expectedSnippet of [
   "setup-latest.json",
   "setup-helper-stdout.log",
   "setup-helper-stderr.log",
+  "setup-powershell-preflight-stdout.log",
+  "setup-powershell-preflight-stderr.log",
   "FastLoop-Windows-x64.zip",
   "Install-FastLoop.cmd",
-  "BuildInstallCmdArgs",
   "DetectFailureCategory",
+  "RunPowerShellPreflight",
+  "WriteCommandScript",
+  "HelperCmdPath",
   "Recovery"
 ]) {
   if (!innoScriptContent.includes(expectedSnippet)) {

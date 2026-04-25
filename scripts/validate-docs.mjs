@@ -15,6 +15,7 @@ const requiredFiles = [
   "release/signing.env.example",
   ".github/workflows/release.yml",
   "scripts/build-release.mjs",
+  "scripts/validate-installer-wrapper.mjs",
   "scripts/build-engine-runtime.mjs"
 ];
 
@@ -46,6 +47,9 @@ const installExpectations = [
   "FastLoop-Windows-x64.zip",
   "Extensions (Legacy)",
   "PlayerDebugMode",
+  "Installer Fails With PowerShell / Exit Code -196608",
+  "setup-latest.log",
+  "setup-helper-stderr.log",
   "manual Python install",
   "fallback",
   "Developer Setup"

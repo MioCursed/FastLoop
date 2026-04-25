@@ -7,6 +7,7 @@ const packageJson = JSON.parse(await readFile(path.join(workspaceRoot, "package.
 const version = packageJson.version ?? "0.0.0";
 const releaseRoot = path.join(workspaceRoot, "release", "out", `FastLoop-${version}`);
 const portableRoot = path.join(releaseRoot, "FastLoop-Windows-x64");
+const installerExe = path.join(releaseRoot, "FastLoop-Windows-x64-Setup.exe");
 const installScript = path.join(portableRoot, "Install-FastLoop.ps1");
 const readinessScript = path.join(portableRoot, "Test-FastLoop-HostReadiness.ps1");
 const validationRoot = path.join(workspaceRoot, "release", "build", "install-smoke", `FastLoop-${version}`);
@@ -85,7 +86,7 @@ await mkdir(missingHelperLogRoot, { recursive: true });
 await mkdir(registryFailureLogRoot, { recursive: true });
 await mkdir(allUsersSkippedLogRoot, { recursive: true });
 
-for (const filePath of [installScript, readinessScript, path.join(portableRoot, "FastLoop", "CSXS", "manifest.xml")]) {
+for (const filePath of [installerExe, installScript, readinessScript, path.join(portableRoot, "FastLoop", "CSXS", "manifest.xml")]) {
   await access(filePath);
 }
 
@@ -656,6 +657,92 @@ assertField(
   "Expected invalid manifest resource paths to be reported as validation errors."
 );
 
+const setupExeRoot = path.join(validationRoot, "setup-exe");
+const setupExeSupportDir = path.join(setupExeRoot, "support files");
+const setupExeInnoLog = path.join(setupExeRoot, "inno-setup.log");
+const setupExeCurrentUserRoot = path.join(setupExeRoot, "current-user", "CEP", "extensions");
+const setupExeSystemRoot = path.join(setupExeRoot, "all-users", "Common Files", "Adobe", "CEP", "extensions");
+await mkdir(setupExeRoot, { recursive: true });
+
+const setupExeInstall = spawnSync(
+  installerExe,
+  [
+    "/VERYSILENT",
+    "/SUPPRESSMSGBOXES",
+    "/NORESTART",
+    `/DIR=${setupExeSupportDir}`,
+    `/LOG=${setupExeInnoLog}`,
+    "/TASKS=unsigned"
+  ],
+  {
+    cwd: workspaceRoot,
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      FASTLOOP_CEP_PER_USER_ROOT: setupExeCurrentUserRoot,
+      FASTLOOP_CEP_SYSTEM_ROOTS: setupExeSystemRoot,
+      FASTLOOP_MOCK_CEP_REGISTRY: "1"
+    }
+  }
+);
+
+const localAppData = process.env.LOCALAPPDATA;
+assertField(Boolean(localAppData), "process.env", "LOCALAPPDATA", "Expected LOCALAPPDATA to locate setup wrapper logs.");
+const realSetupLogRoot = path.join(localAppData, "FastLoop", "Logs");
+const realRecoveryZip = path.join(localAppData, "FastLoop", "Recovery", "FastLoop-Windows-x64.zip");
+const realSetupLogPath = path.join(realSetupLogRoot, "setup-latest.log");
+const realSetupSummaryPath = path.join(realSetupLogRoot, "setup-latest.json");
+const realSetupStdoutPath = path.join(realSetupLogRoot, "setup-helper-stdout.log");
+const realSetupStderrPath = path.join(realSetupLogRoot, "setup-helper-stderr.log");
+
+if (setupExeInstall.status !== 0) {
+  const setupLogSnippet = await readFile(realSetupLogPath, "utf8").catch(() => "");
+  throw new Error(
+    `Generated installer EXE smoke failed with exit ${setupExeInstall.status}. ` +
+      `stdout=${setupExeInstall.stdout} stderr=${setupExeInstall.stderr} setupLog=${setupLogSnippet.slice(0, 2000)}`
+  );
+}
+
+for (const filePath of [
+  setupExeInnoLog,
+  realSetupLogPath,
+  realSetupSummaryPath,
+  realSetupStdoutPath,
+  realSetupStderrPath,
+  realRecoveryZip
+]) {
+  await access(filePath);
+}
+
+const setupExeSummary = await parseJsonReport(realSetupSummaryPath);
+assertField(setupExeSummary.stage === "succeeded", realSetupSummaryPath, "stage", `Expected generated installer EXE smoke to finish successfully, got ${String(setupExeSummary.stage)}.`);
+assertField(setupExeSummary.category === "success", realSetupSummaryPath, "category", `Expected generated installer EXE smoke success category, got ${String(setupExeSummary.category)}.`);
+assertField(setupExeSummary.powershellPreflightSucceeded === true, realSetupSummaryPath, "powershellPreflightSucceeded", "Expected PowerShell preflight to pass.");
+assertField(setupExeSummary.payloadZipExists === true, realSetupSummaryPath, "payloadZipExists", "Expected setup wrapper to find payload zip.");
+assertField(setupExeSummary.installHelperExists === true, realSetupSummaryPath, "installHelperExists", "Expected setup wrapper to find Install-FastLoop.ps1.");
+assertField(setupExeSummary.commonHelperExists === true, realSetupSummaryPath, "commonHelperExists", "Expected setup wrapper to find FastLoop-CEPCommon.ps1.");
+assertField(setupExeSummary.readinessHelperExists === true, realSetupSummaryPath, "readinessHelperExists", "Expected setup wrapper to find readiness helper.");
+
+const setupExeInstallReportPath = path.join(realSetupLogRoot, "install-latest.json");
+await access(setupExeInstallReportPath);
+const setupExeInstallReport = await parseJsonReport(setupExeInstallReportPath);
+const setupExeInstallTargets = Array.isArray(setupExeInstallReport.installTargets) ? setupExeInstallReport.installTargets : [];
+assertField(setupExeInstallTargets.length > 0, setupExeInstallReportPath, "installTargets", "Expected generated installer EXE to report at least one installed target.");
+const setupExeInstalledRoot = setupExeInstallTargets[0]?.TargetRoot;
+assertField(Boolean(setupExeInstalledRoot), setupExeInstallReportPath, "installTargets[0].TargetRoot", "Expected generated installer EXE to report installed target root.");
+
+for (const filePath of [
+  path.join(setupExeInstalledRoot, "CSXS", "manifest.xml"),
+  path.join(setupExeInstalledRoot, "dist", "index.html"),
+  path.join(setupExeInstalledRoot, "host-index.jsx"),
+  path.join(setupExeInstalledRoot, "install-verification.json")
+]) {
+  await access(filePath);
+}
+
+const setupLogText = await readFile(realSetupLogPath, "utf8");
+assertField(!/\{[01]\}|%s|\b(undefined|null)\b/i.test(setupLogText), realSetupLogPath, "content", "Setup wrapper log contains unresolved placeholder text.");
+
 console.log(
   JSON.stringify(
     {
@@ -669,7 +756,12 @@ console.log(
       missingHelperExitCode: missingHelperInstall.status,
       registryFailureExitCode: registryFailureInstall.status,
       blockedLogExitCode: blockedLogInstall.status,
-      invalidPathExitCode: invalidPathInstall.status
+      invalidPathExitCode: invalidPathInstall.status,
+      setupExeExitCode: setupExeInstall.status,
+      setupExeSupportDir,
+      setupExeInnoLog,
+      setupExeLog: realSetupLogPath,
+      setupExeRecoveryZip: realRecoveryZip
     },
     null,
     2

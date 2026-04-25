@@ -19,6 +19,7 @@ Current packaging output includes:
 - `TROUBLESHOOTING.md` plus `Test-FastLoop-HostReadiness.ps1` for “installed but not visible” CEP diagnostics
 
 - setup-wrapper diagnostics under `%LOCALAPPDATA%\FastLoop\Logs`, including `setup-latest.log`, `setup-latest.json`, and helper stdout/stderr captures
+- PowerShell preflight diagnostics under `%LOCALAPPDATA%\FastLoop\Logs`, including `setup-powershell-preflight-stdout.log` and `setup-powershell-preflight-stderr.log`
 - a recovery copy of `FastLoop-Windows-x64.zip` under `%LOCALAPPDATA%\FastLoop\Recovery` when setup reaches the payload stage
 
 Recommended release flow:
