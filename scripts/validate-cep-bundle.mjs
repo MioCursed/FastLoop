@@ -1,5 +1,6 @@
 import { access, readFile } from "node:fs/promises";
 import path from "node:path";
+import "./validate-panel-dist.mjs";
 
 const workspaceRoot = process.cwd();
 const packageJson = JSON.parse(await readFile(path.join(workspaceRoot, "package.json"), "utf8"));

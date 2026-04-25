@@ -1,14 +1,14 @@
 {
   "name": "@fastloop/panel",
-  "version": "0.1.1-beta.4",
+  "version": "0.1.1-beta.5",
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "vite build",
+    "build": "vite build && node ../scripts/validate-panel-dist.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "dev": "vite"
   },
   "dependencies": {
-    "@fastloop/shared": "0.1.1-beta.4"
+    "@fastloop/shared": "0.1.1-beta.5"
   }
 }

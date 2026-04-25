@@ -1,0 +1,517 @@
+function Resolve-FastLoopPath([string]$InputPath, [string]$Fallback, [string]$ScriptRoot) {
+  $candidate = if ($InputPath) { $InputPath } else { $Fallback }
+  if ([System.IO.Path]::IsPathRooted($candidate)) {
+    return $candidate
+  }
+
+  return Join-Path $ScriptRoot $candidate
+}
+
+function Get-FastLoopPerUserCepRoot() {
+  if ($env:FASTLOOP_CEP_PER_USER_ROOT) {
+    return $env:FASTLOOP_CEP_PER_USER_ROOT
+  }
+
+  return Join-Path $env:APPDATA "Adobe\CEP\extensions"
+}
+
+function Get-FastLoopSystemCepRoots() {
+  if ($env:FASTLOOP_CEP_SYSTEM_ROOTS) {
+    return @(
+      $env:FASTLOOP_CEP_SYSTEM_ROOTS.Split(";", [System.StringSplitOptions]::RemoveEmptyEntries) |
+        ForEach-Object { $_.Trim() } |
+        Where-Object { $_ }
+    )
+  }
+
+  $systemRoots = @()
+  foreach ($base in @($env:ProgramFiles, ${env:ProgramFiles(x86)})) {
+    if ($base) {
+      $systemRoots += Join-Path $base "Common Files\Adobe\CEP\extensions"
+    }
+  }
+
+  return @($systemRoots | Select-Object -Unique)
+}
+
+function Get-FastLoopManifestSummary([string]$ManifestPath) {
+  if (-not (Test-Path -LiteralPath $ManifestPath)) {
+    throw "FastLoop manifest not found at $ManifestPath"
+  }
+
+  [xml]$manifest = Get-Content -LiteralPath $ManifestPath
+  $extension = $manifest.ExtensionManifest.ExtensionList.Extension
+  $dispatchInfo = $manifest.ExtensionManifest.DispatchInfoList.Extension.DispatchInfo
+
+  return [PSCustomObject]@{
+    ExtensionBundleId = [string]$manifest.ExtensionManifest.ExtensionBundleId
+    ExtensionBundleVersion = [string]$manifest.ExtensionManifest.ExtensionBundleVersion
+    ExtensionId = [string]$extension.Id
+    ExtensionVersion = [string]$extension.Version
+    Hosts = @($manifest.ExtensionManifest.ExecutionEnvironment.HostList.Host | ForEach-Object {
+        [PSCustomObject]@{
+          Name = [string]$_.Name
+          Version = [string]$_.Version
+        }
+      })
+    MainPath = [string]$dispatchInfo.Resources.MainPath
+    ScriptPath = [string]$dispatchInfo.Resources.ScriptPath
+    Menu = [string]$dispatchInfo.UI.Menu
+  }
+}
+
+function Resolve-FastLoopManifestResourcePath(
+  [string]$BundleRoot,
+  [string]$ResourcePath
+) {
+  $bundleRootFull = [System.IO.Path]::GetFullPath($BundleRoot)
+  $bundleRootPrefix = $bundleRootFull.TrimEnd('\', '/') + [System.IO.Path]::DirectorySeparatorChar
+  $resourceValue = if ($ResourcePath) { [string]$ResourcePath } else { "" }
+  $resolvedPath = $null
+  $pathEscapesBundle = $false
+
+  if ($resourceValue.Trim()) {
+    if ([System.IO.Path]::IsPathRooted($resourceValue)) {
+      $resolvedPath = [System.IO.Path]::GetFullPath($resourceValue)
+    } else {
+      $relativePath = $resourceValue.TrimStart('\', '/')
+      $resolvedPath = [System.IO.Path]::GetFullPath((Join-Path $bundleRootFull $relativePath))
+    }
+
+    if (($resolvedPath -ne $bundleRootFull) -and (-not $resolvedPath.StartsWith($bundleRootPrefix, [System.StringComparison]::OrdinalIgnoreCase))) {
+      $pathEscapesBundle = $true
+    }
+  }
+
+  $exists = $false
+  if ($resolvedPath -and -not $pathEscapesBundle) {
+    $exists = Test-Path -LiteralPath $resolvedPath
+  }
+
+  return [PSCustomObject]@{
+    Value = $resourceValue
+    ResolvedPath = $resolvedPath
+    PathEscapesBundle = $pathEscapesBundle
+    Exists = $exists
+  }
+}
+
+function Get-FastLoopBundleValidationErrors([object]$BundleCheck) {
+  $errors = @()
+
+  if (@($BundleCheck.MissingPaths).Count -gt 0) {
+    $errors += "Missing required paths: $($BundleCheck.MissingPaths -join ', ')"
+  }
+  if ($BundleCheck.ManifestPathEscapesBundle) {
+    $errors += "Manifest resource path escapes bundle root."
+  }
+  if ($BundleCheck.ManifestMainPathEscapesBundle) {
+    $errors += "Manifest MainPath resolves outside bundle root: $($BundleCheck.ManifestSummary.MainPath)"
+  }
+  if ($BundleCheck.ManifestScriptPathEscapesBundle) {
+    $errors += "Manifest ScriptPath resolves outside bundle root: $($BundleCheck.ManifestSummary.ScriptPath)"
+  }
+  if ($BundleCheck.ResolvedMainPathMissing) {
+    $errors += "Resolved MainPath missing: $($BundleCheck.ResolvedMainPath)"
+  }
+  if ($BundleCheck.ResolvedScriptPathMissing) {
+    $errors += "Resolved ScriptPath missing: $($BundleCheck.ResolvedScriptPath)"
+  }
+  if ($BundleCheck.ManifestMainPathUnexpected) {
+    $errors += "Manifest MainPath must be ./dist/index.html, got: $($BundleCheck.ManifestSummary.MainPath)"
+  }
+  if ($BundleCheck.ManifestScriptPathUnexpected) {
+    $errors += "Manifest ScriptPath must be ./host-index.jsx, got: $($BundleCheck.ManifestSummary.ScriptPath)"
+  }
+
+  return @($errors)
+}
+
+function Test-FastLoopBundleContents([string]$BundleRoot) {
+  $requiredPaths = @(
+    "CSXS\manifest.xml",
+    "dist\index.html",
+    "host-index.jsx",
+    "host-premiere\jsx\fastloop_premiere.jsx",
+    "host-aftereffects\jsx\fastloop_aftereffects.jsx",
+    "engine-runtime\windows-x64\fastloop-engine-runtime\fastloop-engine-runtime.exe"
+  )
+
+  $missingPaths = @()
+  foreach ($relativePath in $requiredPaths) {
+    $absolutePath = Join-Path $BundleRoot $relativePath
+    if (-not (Test-Path -LiteralPath $absolutePath)) {
+      $missingPaths += $relativePath
+    }
+  }
+
+  $manifestPath = Join-Path $BundleRoot "CSXS\manifest.xml"
+  $manifestSummary = $null
+  $manifestMainPath = $null
+  $manifestScriptPath = $null
+  $manifestMainPathEscapesBundle = $false
+  $manifestScriptPathEscapesBundle = $false
+  $resolvedMainPathMissing = $false
+  $resolvedScriptPathMissing = $false
+  $manifestMainPathUnexpected = $false
+  $manifestScriptPathUnexpected = $false
+  if (Test-Path -LiteralPath $manifestPath) {
+    $manifestSummary = Get-FastLoopManifestSummary -ManifestPath $manifestPath
+    $mainPathResolution = Resolve-FastLoopManifestResourcePath -BundleRoot $BundleRoot -ResourcePath $manifestSummary.MainPath
+    $scriptPathResolution = Resolve-FastLoopManifestResourcePath -BundleRoot $BundleRoot -ResourcePath $manifestSummary.ScriptPath
+
+    $manifestMainPathUnexpected = ($manifestSummary.MainPath -ne "./dist/index.html")
+    $manifestScriptPathUnexpected = ($manifestSummary.ScriptPath -ne "./host-index.jsx")
+    $manifestMainPath = $mainPathResolution.ResolvedPath
+    $manifestScriptPath = $scriptPathResolution.ResolvedPath
+    $manifestMainPathEscapesBundle = [bool]$mainPathResolution.PathEscapesBundle
+    $manifestScriptPathEscapesBundle = [bool]$scriptPathResolution.PathEscapesBundle
+    $resolvedMainPathMissing = (-not $manifestMainPathEscapesBundle) -and (-not $mainPathResolution.Exists)
+    $resolvedScriptPathMissing = (-not $manifestScriptPathEscapesBundle) -and (-not $scriptPathResolution.Exists)
+  }
+
+  $manifestPathEscapesBundle = $manifestMainPathEscapesBundle -or $manifestScriptPathEscapesBundle
+  $isComplete = (
+    ($missingPaths.Count -eq 0) -and
+    (-not $manifestPathEscapesBundle) -and
+    (-not $resolvedMainPathMissing) -and
+    (-not $resolvedScriptPathMissing) -and
+    (-not $manifestMainPathUnexpected) -and
+    (-not $manifestScriptPathUnexpected)
+  )
+
+  $result = [PSCustomObject]@{
+    BundleRoot = $BundleRoot
+    IsComplete = $isComplete
+    MissingPaths = $missingPaths
+    ManifestPath = $manifestPath
+    ManifestSummary = $manifestSummary
+    ManifestPathEscapesBundle = $manifestPathEscapesBundle
+    ManifestMainPathEscapesBundle = $manifestMainPathEscapesBundle
+    ManifestScriptPathEscapesBundle = $manifestScriptPathEscapesBundle
+    ResolvedMainPath = $manifestMainPath
+    ResolvedScriptPath = $manifestScriptPath
+    ResolvedMainPathMissing = $resolvedMainPathMissing
+    ResolvedScriptPathMissing = $resolvedScriptPathMissing
+    ManifestMainPathUnexpected = $manifestMainPathUnexpected
+    ManifestScriptPathUnexpected = $manifestScriptPathUnexpected
+  }
+  $result | Add-Member -NotePropertyName ValidationErrors -NotePropertyValue (Get-FastLoopBundleValidationErrors -BundleCheck $result)
+
+  return $result
+}
+
+function Get-FastLoopKnownCepRoots([string]$InstallRoot = "", [string]$InstallScope = "CurrentUser") {
+  if ($InstallRoot) {
+    return @(
+      [PSCustomObject]@{
+        Scope = "Custom"
+        Root = (Split-Path -Parent $InstallRoot)
+        TargetRoot = $InstallRoot
+      }
+    )
+  }
+
+  $roots = @()
+  $perUserRoot = Get-FastLoopPerUserCepRoot
+  $roots += [PSCustomObject]@{
+    Scope = "CurrentUser"
+    Root = $perUserRoot
+    TargetRoot = Join-Path $perUserRoot "FastLoop"
+  }
+
+  $systemRoots = Get-FastLoopSystemCepRoots
+
+  if ($InstallScope -eq "AllUsers") {
+    if ($systemRoots.Count -gt 0) {
+      return @($systemRoots | ForEach-Object {
+          [PSCustomObject]@{
+            Scope = "AllUsers"
+            Root = $_
+            TargetRoot = Join-Path $_ "FastLoop"
+          }
+        })
+    }
+
+    return $roots
+  }
+
+  return $roots
+}
+
+function Get-FastLoopPreferredInstallTargets([string]$InstallRoot = "", [string]$InstallScope = "Auto") {
+  if ($InstallRoot) {
+    return [PSCustomObject]@{
+      Strategy = "Custom"
+      PrimaryTargets = Get-FastLoopKnownCepRoots -InstallRoot $InstallRoot -InstallScope "CurrentUser"
+      SecondaryTargets = @()
+      PerUserRoot = $null
+      SystemRoots = @()
+    }
+  }
+
+  $perUserTargets = Get-FastLoopKnownCepRoots -InstallScope "CurrentUser"
+  $systemTargets = Get-FastLoopKnownCepRoots -InstallScope "AllUsers"
+
+  switch ($InstallScope) {
+    "CurrentUser" {
+      return [PSCustomObject]@{
+        Strategy = "CurrentUser"
+        PrimaryTargets = $perUserTargets
+        SecondaryTargets = @()
+        PerUserRoot = @($perUserTargets | Select-Object -ExpandProperty Root -First 1)
+        SystemRoots = @($systemTargets | Select-Object -ExpandProperty Root)
+      }
+    }
+    "AllUsers" {
+      return [PSCustomObject]@{
+        Strategy = "AllUsers"
+        PrimaryTargets = $systemTargets
+        SecondaryTargets = @()
+        PerUserRoot = @($perUserTargets | Select-Object -ExpandProperty Root -First 1)
+        SystemRoots = @($systemTargets | Select-Object -ExpandProperty Root)
+      }
+    }
+    default {
+      return [PSCustomObject]@{
+        Strategy = "Auto"
+        PrimaryTargets = $perUserTargets
+        SecondaryTargets = $systemTargets
+        PerUserRoot = @($perUserTargets | Select-Object -ExpandProperty Root -First 1)
+        SystemRoots = @($systemTargets | Select-Object -ExpandProperty Root)
+      }
+    }
+  }
+}
+
+function Find-FastLoopDuplicateBundles([object[]]$KnownRoots, [string]$ExpectedBundleId = "com.fastloop.panel") {
+  $results = @()
+  foreach ($root in $KnownRoots) {
+    if (-not (Test-Path -LiteralPath $root.Root)) {
+      continue
+    }
+
+    foreach ($child in Get-ChildItem -LiteralPath $root.Root -Directory -ErrorAction SilentlyContinue) {
+      $manifestPath = Join-Path $child.FullName "CSXS\manifest.xml"
+      if (-not (Test-Path -LiteralPath $manifestPath)) {
+        continue
+      }
+
+      try {
+        $summary = Get-FastLoopManifestSummary -ManifestPath $manifestPath
+        if ($summary.ExtensionBundleId -eq $ExpectedBundleId) {
+          $results += [PSCustomObject]@{
+            Scope = $root.Scope
+            BundleRoot = $child.FullName
+            ManifestPath = $manifestPath
+            ExtensionBundleVersion = $summary.ExtensionBundleVersion
+            ExtensionId = $summary.ExtensionId
+          }
+        }
+      } catch {
+        $results += [PSCustomObject]@{
+          Scope = $root.Scope
+          BundleRoot = $child.FullName
+          ManifestPath = $manifestPath
+          ExtensionBundleVersion = "unknown"
+          ExtensionId = "unknown"
+        }
+      }
+    }
+  }
+
+  return $results
+}
+
+function Test-FastLoopPathWritable([string]$TargetPath) {
+  $targetParent = Split-Path -Parent $TargetPath
+  try {
+    New-Item -ItemType Directory -Force -Path $targetParent | Out-Null
+    $probePath = Join-Path $targetParent (".fastloop-write-test-" + [Guid]::NewGuid().ToString("N"))
+    Set-Content -LiteralPath $probePath -Value "ok" -Encoding UTF8
+    Remove-Item -LiteralPath $probePath -Force
+    return $true
+  } catch {
+    return $false
+  }
+}
+
+function Get-FastLoopVersionPriority([string]$Version) {
+  $cleanVersion = if ($Version) { $Version } else { "0.0.0.0" }
+  try {
+    return [System.Version]::Parse($cleanVersion)
+  } catch {
+    return [System.Version]::Parse("0.0.0.0")
+  }
+}
+
+function Get-FastLoopMenuPaths([string]$HostName) {
+  $hostLabel = switch ($HostName) {
+    "PPRO" { "Premiere Pro" }
+    "AEFT" { "After Effects" }
+    default { $HostName }
+  }
+
+  return [PSCustomObject]@{
+    HostName = $HostName
+    HostLabel = $hostLabel
+    PrimaryMenuPath = "Window > Extensions (Legacy) > FastLoop"
+    SecondaryMenuPath = "Window > Extensions > FastLoop"
+  }
+}
+
+function Get-FastLoopCepLogFiles([string]$HostName, [int]$LookbackHours = 48) {
+  $tempRoot = Join-Path $env:LOCALAPPDATA "Temp"
+  if (-not (Test-Path -LiteralPath $tempRoot)) {
+    return @()
+  }
+
+  $patterns = switch ($HostName) {
+    "PPRO" { @("CEP*-PPRO*.log", "CEPHtmlEngine*-PPRO-*.log") }
+    "AEFT" { @("CEP*-AEFT*.log", "CEPHtmlEngine*-AEFT-*.log") }
+    default { @("CEP*.log") }
+  }
+
+  $cutoff = (Get-Date).AddHours(-1 * [Math]::Abs($LookbackHours))
+  $files = @()
+  foreach ($pattern in $patterns) {
+    $files += Get-ChildItem -LiteralPath $tempRoot -Filter $pattern -File -ErrorAction SilentlyContinue
+  }
+
+  return @(
+    $files |
+      Sort-Object LastWriteTime -Descending |
+      Where-Object { $_.LastWriteTime -ge $cutoff } |
+      Select-Object -Unique -First 40
+  )
+}
+
+function Get-FastLoopHostLoadEvidence(
+  [string]$HostName,
+  [string]$ExpectedBundleId = "com.fastloop.panel",
+  [int]$LookbackHours = 48
+) {
+  $logFiles = Get-FastLoopCepLogFiles -HostName $HostName -LookbackHours $LookbackHours
+  $bundleMentions = 0
+  $errorSignals = 0
+  $lastMentionAt = $null
+  $matchedLogs = @()
+
+  foreach ($logFile in $logFiles) {
+    try {
+      $content = Get-Content -LiteralPath $logFile.FullName -Raw -ErrorAction Stop
+    } catch {
+      continue
+    }
+
+    $matchesBundle = ($content -match [Regex]::Escape($ExpectedBundleId)) -or ($content -match "FastLoop")
+    if ($matchesBundle) {
+      $bundleMentions += 1
+      $matchedLogs += $logFile.FullName
+      if (-not $lastMentionAt -or $logFile.LastWriteTime -gt $lastMentionAt) {
+        $lastMentionAt = $logFile.LastWriteTime
+      }
+
+      if ($content -match "(?im)(error|exception|failed|cannot load|manifest|signature)") {
+        $errorSignals += 1
+      }
+    }
+  }
+
+  $status = if ($bundleMentions -eq 0) {
+    "no-evidence"
+  } elseif ($errorSignals -gt 0) {
+    "error-signals"
+  } else {
+    "confirmed"
+  }
+
+  return [PSCustomObject]@{
+    HostName = $HostName
+    LogLookbackHours = $LookbackHours
+    LogFilesScanned = $logFiles.Count
+    MentionCount = $bundleMentions
+    ErrorSignalCount = $errorSignals
+    Status = $status
+    LastMentionAt = if ($lastMentionAt) { (Get-Date $lastMentionAt -Format "o") } else { $null }
+    MatchedLogFiles = @($matchedLogs | Select-Object -Unique)
+  }
+}
+
+function New-FastLoopHostReadinessReport(
+  [object]$ManifestSummary,
+  [object[]]$InstalledTargets,
+  [object[]]$DuplicateBundles,
+  [bool]$UnsignedReady,
+  [string]$ExpectedBundleId = "com.fastloop.panel",
+  [int]$LogLookbackHours = 48
+) {
+  $hostReports = @()
+  foreach ($hostName in @("PPRO", "AEFT")) {
+    $menuInfo = Get-FastLoopMenuPaths -HostName $hostName
+    $hostCovered = $false
+    if ($ManifestSummary -and $ManifestSummary.Hosts) {
+      $hostCovered = (@($ManifestSummary.Hosts | Where-Object { $_.Name -eq $hostName }).Count -gt 0)
+    }
+
+    $hostDuplicates = @($DuplicateBundles | Where-Object { $_.Scope -eq "AllUsers" -or $_.Scope -eq "CurrentUser" -or $_.Scope -eq "Custom" })
+    $loadEvidence = Get-FastLoopHostLoadEvidence -HostName $hostName -ExpectedBundleId $ExpectedBundleId -LookbackHours $LogLookbackHours
+    $preconditionsReady = ($hostCovered -and $UnsignedReady -and @($InstalledTargets).Count -gt 0)
+    $hostLoadConfirmed = ($loadEvidence.Status -eq "confirmed")
+    $hostReports += [PSCustomObject]@{
+      HostName = $hostName
+      HostLabel = $menuInfo.HostLabel
+      CoveredByManifest = $hostCovered
+      PreconditionsReady = $preconditionsReady
+      HostLoadEvidence = $loadEvidence
+      HostLoadConfirmed = $hostLoadConfirmed
+      LikelyReady = ($preconditionsReady -and ($loadEvidence.Status -ne "error-signals"))
+      InstalledRoots = @($InstalledTargets | ForEach-Object { $_.TargetRoot })
+      DuplicateBundleCount = $hostDuplicates.Count
+      PrimaryMenuPath = $menuInfo.PrimaryMenuPath
+      SecondaryMenuPath = $menuInfo.SecondaryMenuPath
+      Guidance = @(
+        "Restart $($menuInfo.HostLabel) after install.",
+        "Check $($menuInfo.PrimaryMenuPath) first.",
+        "If not visible there, also check $($menuInfo.SecondaryMenuPath).",
+        "Inspect CEP logs under %LOCALAPPDATA%\\Temp for $ExpectedBundleId load evidence."
+      )
+    }
+  }
+
+  return $hostReports
+}
+
+function Get-FastLoopUnsignedExtensionState([string]$RegistryBasePath = "HKCU:\Software\Adobe") {
+  return @(@("11", "12", "13") | ForEach-Object {
+      $csxsVersion = $_
+      $keyPath = Join-Path $RegistryBasePath ("CSXS." + $csxsVersion)
+      $playerDebugMode = $null
+      if (Test-Path -LiteralPath $keyPath) {
+        $playerDebugMode = (Get-ItemProperty -LiteralPath $keyPath -Name "PlayerDebugMode" -ErrorAction SilentlyContinue).PlayerDebugMode
+      }
+
+      [PSCustomObject]@{
+        CsxsVersion = $csxsVersion
+        RegistryPath = $keyPath
+        PlayerDebugMode = [string]$playerDebugMode
+        Enabled = ([string]$playerDebugMode -eq "1")
+      }
+    })
+}
+
+function Enable-FastLoopUnsignedExtensions([string]$RegistryBasePath = "HKCU:\Software\Adobe") {
+  $changes = @()
+  foreach ($csxsVersion in @("11", "12", "13")) {
+    $keyPath = Join-Path $RegistryBasePath ("CSXS." + $csxsVersion)
+    New-Item -Path $keyPath -Force | Out-Null
+    New-ItemProperty -LiteralPath $keyPath -Name "PlayerDebugMode" -PropertyType String -Value "1" -Force | Out-Null
+    $changes += [PSCustomObject]@{
+      CsxsVersion = $csxsVersion
+      RegistryPath = $keyPath
+      PlayerDebugMode = "1"
+    }
+  }
+
+  return $changes
+}
