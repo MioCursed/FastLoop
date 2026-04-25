@@ -51,6 +51,32 @@ The installer fails visibly if the install helper or verification fails. It writ
 
 - `%LOCALAPPDATA%\FastLoop\Logs`
 
+### Setup Fails Before FastLoop Appears
+
+If `FastLoop-Windows-x64-Setup.exe` fails during the installing page, first open:
+
+- `%LOCALAPPDATA%\FastLoop\Logs\setup-latest.log`
+- `%LOCALAPPDATA%\FastLoop\Logs\setup-latest.json`
+- `%LOCALAPPDATA%\FastLoop\Logs\setup-helper-stdout.log`
+- `%LOCALAPPDATA%\FastLoop\Logs\setup-helper-stderr.log`
+
+If the helper started far enough, also check:
+
+- `%LOCALAPPDATA%\FastLoop\Logs\install-latest.log`
+- `%LOCALAPPDATA%\FastLoop\Logs\install-latest.json`
+
+The setup wrapper also copies the portable payload to:
+
+- `%LOCALAPPDATA%\FastLoop\Recovery\FastLoop-Windows-x64.zip`
+
+Fallback steps:
+
+1. Extract `FastLoop-Windows-x64.zip`.
+2. Run `Install-FastLoop.cmd`.
+3. Close Premiere Pro and After Effects before retrying.
+4. Run the setup wizard as administrator only when you need AllUsers CEP roots under `Program Files`.
+5. After install, check `Window > Extensions (Legacy) > FastLoop`, then `Window > Extensions > FastLoop`.
+
 ### Open FastLoop
 
 After installing, restart Premiere Pro or After Effects and use one of these menu paths:

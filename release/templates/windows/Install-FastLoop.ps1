@@ -16,7 +16,6 @@ $ErrorActionPreference = "Stop"
 $script:FastLoopVersion = "__FASTLOOP_VERSION__"
 $script:FastLoopBundleId = "com.fastloop.panel"
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
-. (Join-Path $scriptRoot "FastLoop-CEPCommon.ps1")
 
 function Resolve-LogDirectory([string]$RequestedLogDirectory) {
   if ($RequestedLogDirectory) {
@@ -35,6 +34,70 @@ function Write-InstallLog([string]$LogPath, [string]$Message) {
 
 function Write-JsonFile([string]$Path, [object]$Value) {
   $Value | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $Path -Encoding UTF8
+}
+
+$logRoot = Resolve-LogDirectory -RequestedLogDirectory $LogDirectory
+New-Item -ItemType Directory -Force -Path $logRoot | Out-Null
+$logStamp = (Get-Date).ToString("yyyyMMdd-HHmmss")
+$installLogPath = Join-Path $logRoot ("install-" + $logStamp + ".log")
+$installSummaryPath = Join-Path $logRoot ("install-" + $logStamp + ".json")
+$latestSummaryPath = Join-Path $logRoot "install-latest.json"
+$latestLogPath = Join-Path $logRoot "install-latest.log"
+$script:LastInstallSummary = $null
+$script:InstallSucceeded = $false
+$script:FailureCategory = "unknown"
+
+try {
+  Write-InstallLog -LogPath $installLogPath -Message "Bootstrapping FastLoop install helper $script:FastLoopVersion"
+  $commonPath = Join-Path $scriptRoot "FastLoop-CEPCommon.ps1"
+  Write-InstallLog -LogPath $installLogPath -Message "Loading shared CEP helper from $commonPath"
+  if (-not (Test-Path -LiteralPath $commonPath)) {
+    throw "Required helper file is missing: $commonPath"
+  }
+  . $commonPath
+} catch {
+  $errorMessage = $_.Exception.Message
+  $script:FailureCategory = "helper-bootstrap-failed"
+  Write-InstallLog -LogPath $installLogPath -Message "Install failed during helper bootstrap: $errorMessage"
+  Write-JsonFile -Path $installSummaryPath -Value ([PSCustomObject]@{
+      version = $script:FastLoopVersion
+      succeeded = $false
+      category = $script:FailureCategory
+      error = $errorMessage
+      scriptRoot = $scriptRoot
+      logPath = $installLogPath
+      commonHelperPath = Join-Path $scriptRoot "FastLoop-CEPCommon.ps1"
+    })
+  Copy-Item -LiteralPath $installSummaryPath -Destination $latestSummaryPath -Force
+  Copy-Item -LiteralPath $installLogPath -Destination $latestLogPath -Force
+  Write-Error $errorMessage
+  exit 1
+}
+
+function Get-InstallFailureCategory([string]$Message) {
+  $normalized = if ($Message) { $Message.ToLowerInvariant() } else { "" }
+  if ($normalized.Contains("payload zip") -or $normalized.Contains("fastloop-windows-x64.zip") -or ($normalized.Contains("cannot find path") -and $normalized.Contains(".zip"))) {
+    return "missing-payload"
+  }
+  if ($normalized.Contains("expand-archive") -or $normalized.Contains("central directory") -or $normalized.Contains("archive")) {
+    return "extraction-failed"
+  }
+  if ($normalized.Contains("required helper file is missing") -or $normalized.Contains("fastloop-cepcommon.ps1")) {
+    return "helper-script-not-found"
+  }
+  if ($normalized.Contains("playerdebugmode") -or $normalized.Contains("registry") -or $normalized.Contains("hkcu:") -or $normalized.Contains("cannot find drive")) {
+    return "registry-failed"
+  }
+  if ($normalized.Contains("not writable") -or $normalized.Contains("access is denied")) {
+    return "cep-target-not-writable"
+  }
+  if ($normalized.Contains("verification") -or $normalized.Contains("readiness") -or $normalized.Contains("not reliable") -or $normalized.Contains("bundle is invalid")) {
+    return "verification-failed"
+  }
+  if ($normalized.Contains("running adobe host")) {
+    return "adobe-hosts-running"
+  }
+  return "unknown-install-helper-failure"
 }
 
 function Show-FastLoopInstallerPanel(
@@ -224,15 +287,6 @@ function Compare-FastLoopTargetPriority([object]$Target) {
   }
 }
 
-$logRoot = Resolve-LogDirectory -RequestedLogDirectory $LogDirectory
-New-Item -ItemType Directory -Force -Path $logRoot | Out-Null
-$logStamp = (Get-Date).ToString("yyyyMMdd-HHmmss")
-$installLogPath = Join-Path $logRoot ("install-" + $logStamp + ".log")
-$installSummaryPath = Join-Path $logRoot ("install-" + $logStamp + ".json")
-$latestSummaryPath = Join-Path $logRoot "install-latest.json"
-$latestLogPath = Join-Path $logRoot "install-latest.log"
-$script:LastInstallSummary = $null
-
 $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("FastLoop-Install-" + [Guid]::NewGuid().ToString("N"))
 
 try {
@@ -271,12 +325,18 @@ try {
 
   if ($PayloadZip) {
     $zipPath = Resolve-FastLoopPath -InputPath $PayloadZip -Fallback "FastLoop-Windows-x64.zip" -ScriptRoot $scriptRoot
+    if (-not (Test-Path -LiteralPath $zipPath)) {
+      throw "FastLoop payload zip is missing: $zipPath"
+    }
     Write-InstallLog -LogPath $installLogPath -Message "Expanding payload zip from $zipPath"
     New-Item -ItemType Directory -Force -Path $tempRoot | Out-Null
     Expand-Archive -LiteralPath $zipPath -DestinationPath $tempRoot -Force
     $bundleRoot = Join-Path $tempRoot "FastLoop"
   } else {
     $bundleRoot = Resolve-FastLoopPath -InputPath $BundleDirectory -Fallback "FastLoop" -ScriptRoot $scriptRoot
+    if (-not (Test-Path -LiteralPath $bundleRoot)) {
+      throw "FastLoop bundle directory is missing: $bundleRoot"
+    }
   }
 
   $sourceCheck = Test-FastLoopBundleContents -BundleRoot $bundleRoot
@@ -419,6 +479,8 @@ try {
     Resolve-FastLoopPath -InputPath "" -Fallback "Test-FastLoop-HostReadiness.ps1" -ScriptRoot $scriptRoot
   }
   $summary = [PSCustomObject]@{
+    succeeded = $true
+    category = "success"
     version = $script:FastLoopVersion
     bundleId = $script:FastLoopBundleId
     installedAt = (Get-Date).ToString("o")
@@ -485,22 +547,33 @@ try {
     Write-Host "Next step: run host diagnostics if needed:"
     Write-Host "powershell -NoProfile -ExecutionPolicy Bypass -File `"$readinessHelperPath`" -InstallScope $effectiveInstallScope -RegistryBasePath `"$RegistryBasePath`" -LogDirectory `"$logRoot`""
   }
+  $script:InstallSucceeded = $true
   exit 0
 } catch {
   $errorMessage = $_.Exception.Message
+  $script:FailureCategory = Get-InstallFailureCategory -Message $errorMessage
+  $tempDiagnosticRoot = if (Test-Path -LiteralPath $tempRoot) { $tempRoot } else { $null }
   Write-InstallLog -LogPath $installLogPath -Message "Install failed: $errorMessage"
+  Write-InstallLog -LogPath $installLogPath -Message "Failure category: $script:FailureCategory"
+  if ($tempDiagnosticRoot -and (-not $script:InstallSucceeded)) {
+    Write-InstallLog -LogPath $installLogPath -Message "Preserving temp diagnostic folder after failure: $tempRoot"
+  }
   $failureSummary = if ($script:LastInstallSummary) {
     [PSCustomObject]@{
       succeeded = $false
+      category = $script:FailureCategory
       error = $errorMessage
+      tempDiagnosticRoot = $tempDiagnosticRoot
       summary = $script:LastInstallSummary
     }
   } else {
     [PSCustomObject]@{
       version = $script:FastLoopVersion
       succeeded = $false
+      category = $script:FailureCategory
       error = $errorMessage
       logPath = $installLogPath
+      tempDiagnosticRoot = $tempDiagnosticRoot
       installRoot = $InstallRoot
       installScope = $InstallScope
       registryBasePath = $RegistryBasePath
@@ -512,7 +585,7 @@ try {
   Write-Error $errorMessage
   exit 1
 } finally {
-  if (Test-Path -LiteralPath $tempRoot) {
+  if ($script:InstallSucceeded -and (Test-Path -LiteralPath $tempRoot)) {
     Remove-Item -LiteralPath $tempRoot -Recurse -Force
   }
 }

@@ -22,6 +22,8 @@
    `SHA256SUMS.txt`
    `release-notes.md`
    `release-manifest.json`
-18. Publish the generated assets to GitHub Releases with tag `v<package.version>`.
-19. Use release title `FastLoop v<package.version> Prerelease`.
-20. Add real signing in the next production-release stage when certificate material is available.
+18. Confirm a failed setup writes `%LOCALAPPDATA%\FastLoop\Logs\setup-latest.log`, `setup-latest.json`, `setup-helper-stdout.log`, and `setup-helper-stderr.log`.
+19. Confirm the portable fallback zip and `Install-FastLoop.cmd` are present in both the release zip and setup payload.
+20. Publish the generated assets to GitHub Releases with tag `v<package.version>`.
+21. Use release title `FastLoop v<package.version> Prerelease`.
+22. Add real signing in the next production-release stage when certificate material is available.

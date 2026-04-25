@@ -18,6 +18,9 @@ Current packaging output includes:
 - `release-notes-template.md` as the source scaffold for generated prerelease notes
 - `TROUBLESHOOTING.md` plus `Test-FastLoop-HostReadiness.ps1` for “installed but not visible” CEP diagnostics
 
+- setup-wrapper diagnostics under `%LOCALAPPDATA%\FastLoop\Logs`, including `setup-latest.log`, `setup-latest.json`, and helper stdout/stderr captures
+- a recovery copy of `FastLoop-Windows-x64.zip` under `%LOCALAPPDATA%\FastLoop\Recovery` when setup reaches the payload stage
+
 Recommended release flow:
 
 ```bash

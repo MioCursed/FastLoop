@@ -483,6 +483,18 @@ function New-FastLoopHostReadinessReport(
 }
 
 function Get-FastLoopUnsignedExtensionState([string]$RegistryBasePath = "HKCU:\Software\Adobe") {
+  if ($env:FASTLOOP_MOCK_CEP_REGISTRY -eq "1") {
+    return @(@("11", "12", "13") | ForEach-Object {
+        $csxsVersion = $_
+        [PSCustomObject]@{
+          CsxsVersion = $csxsVersion
+          RegistryPath = Join-Path $RegistryBasePath ("CSXS." + $csxsVersion)
+          PlayerDebugMode = "1"
+          Enabled = $true
+        }
+      })
+  }
+
   return @(@("11", "12", "13") | ForEach-Object {
       $csxsVersion = $_
       $keyPath = Join-Path $RegistryBasePath ("CSXS." + $csxsVersion)
@@ -501,6 +513,17 @@ function Get-FastLoopUnsignedExtensionState([string]$RegistryBasePath = "HKCU:\S
 }
 
 function Enable-FastLoopUnsignedExtensions([string]$RegistryBasePath = "HKCU:\Software\Adobe") {
+  if ($env:FASTLOOP_MOCK_CEP_REGISTRY -eq "1") {
+    return @(@("11", "12", "13") | ForEach-Object {
+        $csxsVersion = $_
+        [PSCustomObject]@{
+          CsxsVersion = $csxsVersion
+          RegistryPath = Join-Path $RegistryBasePath ("CSXS." + $csxsVersion)
+          PlayerDebugMode = "1"
+        }
+      })
+  }
+
   $changes = @()
   foreach ($csxsVersion in @("11", "12", "13")) {
     $keyPath = Join-Path $RegistryBasePath ("CSXS." + $csxsVersion)

@@ -32,9 +32,33 @@ failure instead of showing a fake success page.
 Check these logs first:
 
 - Inno Setup log: `%TEMP%\Setup Log*.txt`
+- FastLoop setup wrapper log: `%LOCALAPPDATA%\FastLoop\Logs\setup-latest.log`
+- FastLoop setup wrapper summary: `%LOCALAPPDATA%\FastLoop\Logs\setup-latest.json`
+- Helper stdout capture: `%LOCALAPPDATA%\FastLoop\Logs\setup-helper-stdout.log`
+- Helper stderr capture: `%LOCALAPPDATA%\FastLoop\Logs\setup-helper-stderr.log`
 - FastLoop install log: `%LOCALAPPDATA%\FastLoop\Logs\install-latest.log`
 - FastLoop install summary: `%LOCALAPPDATA%\FastLoop\Logs\install-latest.json`
 - Readiness summary: `%LOCALAPPDATA%\FastLoop\Logs\host-readiness-latest.json`
+
+## Setup fails before FastLoop appears
+
+If the setup wizard fails before FastLoop appears in Adobe, treat it as an installer/helper problem first.
+
+1. Close Premiere Pro and After Effects.
+2. Open `%LOCALAPPDATA%\FastLoop\Logs\setup-latest.log`.
+3. Check `%LOCALAPPDATA%\FastLoop\Logs\setup-latest.json` for the failure category and raw exit code.
+4. If present, check `%LOCALAPPDATA%\FastLoop\Logs\install-latest.log` and `install-latest.json`.
+5. If the failure mentions permissions or AllUsers/system CEP roots, rerun setup as administrator only if your environment requires system CEP roots.
+6. If setup still fails, extract `FastLoop-Windows-x64.zip` and run `Install-FastLoop.cmd`.
+
+The setup wrapper attempts to copy a recovery zip to:
+
+- `%LOCALAPPDATA%\FastLoop\Recovery\FastLoop-Windows-x64.zip`
+
+After a fallback install, restart the Adobe host and check both menu paths:
+
+- `Window > Extensions (Legacy) > FastLoop`
+- `Window > Extensions > FastLoop`
 
 ## Installed and validated but not visible
 

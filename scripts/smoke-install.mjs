@@ -19,12 +19,21 @@ const logRoot = path.join(validationRoot, "logs");
 const failureLogRoot = path.join(validationRoot, "logs-failure");
 const allUsersLogRoot = path.join(validationRoot, "logs-allusers");
 const conflictLogRoot = path.join(validationRoot, "logs-conflict");
-const registryBasePath = `HKCU:\\Software\\FastLoop\\InstallSmoke\\${version.replace(/[^A-Za-z0-9]/g, "_")}`;
+const missingPayloadLogRoot = path.join(validationRoot, "logs-missing-payload");
+const missingHelperLogRoot = path.join(validationRoot, "logs-missing-helper");
+const registryFailureLogRoot = path.join(validationRoot, "logs-registry-failure");
+const blockedLogRootParent = path.join(validationRoot, "logs-blocked-file");
+const allUsersSkippedLogRoot = path.join(validationRoot, "logs-allusers-skipped");
+const registryBasePath = `HKCU:\\Software\\FastLoop\\InstallSmoke\\${version.replace(/[^A-Za-z0-9]/g, "_")}\\${Date.now()}`;
 const envOverrides = {
   ...process.env,
   FASTLOOP_CEP_PER_USER_ROOT: currentUserRoot,
-  FASTLOOP_CEP_SYSTEM_ROOTS: `${systemRootA};${systemRootB}`
+  FASTLOOP_CEP_SYSTEM_ROOTS: `${systemRootA};${systemRootB}`,
+  FASTLOOP_MOCK_CEP_REGISTRY: "1"
 };
+
+const envWithRealRegistry = { ...envOverrides };
+delete envWithRealRegistry.FASTLOOP_MOCK_CEP_REGISTRY;
 
 const parseJsonReport = async (filePath) => {
   const content = await readFile(filePath, "utf8");
@@ -64,19 +73,24 @@ const toStaleManifestVersion = (manifestVersion) => {
 };
 
 const normalizePathForCompare = (value) => String(value ?? "").replaceAll("\\", "/").toLowerCase();
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 await rm(validationRoot, { recursive: true, force: true });
 await mkdir(logRoot, { recursive: true });
 await mkdir(failureLogRoot, { recursive: true });
 await mkdir(allUsersLogRoot, { recursive: true });
 await mkdir(conflictLogRoot, { recursive: true });
+await mkdir(missingPayloadLogRoot, { recursive: true });
+await mkdir(missingHelperLogRoot, { recursive: true });
+await mkdir(registryFailureLogRoot, { recursive: true });
+await mkdir(allUsersSkippedLogRoot, { recursive: true });
 
 for (const filePath of [installScript, readinessScript, path.join(portableRoot, "FastLoop", "CSXS", "manifest.xml")]) {
   await access(filePath);
 }
 
 execFileSync(
-  "powershell",
+  "powershell.exe",
   [
     "-NoProfile",
     "-ExecutionPolicy",
@@ -126,8 +140,59 @@ for (const csxsVersion of ["11", "12", "13"]) {
   );
 }
 
+const blockedSystemRootA = path.join(validationRoot, "blocked-system-a");
+const blockedSystemRootB = path.join(validationRoot, "blocked-system-b");
+await writeFile(blockedSystemRootA, "not a directory", "utf8");
+await writeFile(blockedSystemRootB, "not a directory", "utf8");
+const allUsersSkippedRoot = path.join(validationRoot, "current-user-skipped", "CEP", "extensions");
+execFileSync(
+  "powershell.exe",
+  [
+    "-NoProfile",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-File",
+    installScript,
+    "-BundleDirectory",
+    path.join(portableRoot, "FastLoop"),
+    "-InstallScope",
+    "Auto",
+    "-RegistryBasePath",
+    `${registryBasePath}\\AllUsersSkipped`,
+    "-LogDirectory",
+    allUsersSkippedLogRoot
+  ],
+  {
+    cwd: workspaceRoot,
+    stdio: "inherit",
+    env: {
+      ...envOverrides,
+      FASTLOOP_CEP_PER_USER_ROOT: allUsersSkippedRoot,
+      FASTLOOP_CEP_SYSTEM_ROOTS: `${blockedSystemRootA};${blockedSystemRootB}`
+    }
+  }
+);
+
+const allUsersSkippedReportPath = path.join(allUsersSkippedLogRoot, "install-latest.json");
+await access(allUsersSkippedReportPath);
+const allUsersSkippedReport = await parseJsonReport(allUsersSkippedReportPath);
+assertField(
+  allUsersSkippedReport.readiness?.currentUserInstalled === true,
+  allUsersSkippedReportPath,
+  "readiness.currentUserInstalled",
+  "Expected CurrentUser install to succeed when optional AllUsers roots are not writable."
+);
+assertField(
+  Array.isArray(allUsersSkippedReport.installAttempts) &&
+    allUsersSkippedReport.installAttempts.some((entry) => entry?.Scope === "AllUsers" && entry?.Writable === false),
+  allUsersSkippedReportPath,
+  "installAttempts[Scope=AllUsers].Writable",
+  "Expected smoke coverage for skipped non-writable AllUsers roots."
+);
+
+await delay(1500);
 const readiness = execFileSync(
-  "powershell",
+  "powershell.exe",
   [
     "-NoProfile",
     "-ExecutionPolicy",
@@ -206,7 +271,7 @@ for (const csxsVersion of ["11", "12", "13"]) {
 }
 
 execFileSync(
-  "powershell",
+  "powershell.exe",
   [
     "-NoProfile",
     "-ExecutionPolicy",
@@ -270,7 +335,7 @@ await writeFile(
 );
 
 const conflictReadiness = spawnSync(
-  "powershell",
+  "powershell.exe",
   [
     "-NoProfile",
     "-ExecutionPolicy",
@@ -354,7 +419,7 @@ assertField(
 );
 
 const failedInstall = spawnSync(
-  "powershell",
+  "powershell.exe",
   [
     "-NoProfile",
     "-ExecutionPolicy",
@@ -383,6 +448,160 @@ if (failedInstall.status === 0) {
 
 await access(path.join(failureLogRoot, "install-latest.json"));
 await access(path.join(failureLogRoot, "install-latest.log"));
+const failedInstallReportPath = path.join(failureLogRoot, "install-latest.json");
+const failedInstallReport = await parseJsonReport(failedInstallReportPath);
+assertField(
+  failedInstallReport.category === "verification-failed" || failedInstallReport.category === "unknown-install-helper-failure",
+  failedInstallReportPath,
+  "category",
+  "Expected readable failure category when helper rejects a missing bundle directory."
+);
+
+const missingPayloadInstall = spawnSync(
+  "powershell.exe",
+  [
+    "-NoProfile",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-File",
+    installScript,
+    "-PayloadZip",
+    path.join(validationRoot, "missing", "FastLoop-Windows-x64.zip"),
+    "-InstallRoot",
+    path.join(validationRoot, "missing-payload-install", "FastLoop"),
+    "-RegistryBasePath",
+    `${registryBasePath}\\MissingPayload`,
+    "-LogDirectory",
+    missingPayloadLogRoot
+  ],
+  {
+    cwd: workspaceRoot,
+    encoding: "utf8",
+    env: envWithRealRegistry
+  }
+);
+
+if (missingPayloadInstall.status === 0) {
+  throw new Error("Install smoke expected a failure when the setup wrapper cannot find the payload zip.");
+}
+
+const missingPayloadReportPath = path.join(missingPayloadLogRoot, "install-latest.json");
+await access(missingPayloadReportPath);
+const missingPayloadReport = await parseJsonReport(missingPayloadReportPath);
+assertField(
+  missingPayloadReport.category === "missing-payload",
+  missingPayloadReportPath,
+  "category",
+  `Expected missing-payload category, received ${String(missingPayloadReport.category)}.`
+);
+
+const missingHelperRoot = path.join(validationRoot, "missing-helper-payload");
+await mkdir(missingHelperRoot, { recursive: true });
+await cp(installScript, path.join(missingHelperRoot, "Install-FastLoop.ps1"));
+const missingHelperInstall = spawnSync(
+  "powershell.exe",
+  [
+    "-NoProfile",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-File",
+    path.join(missingHelperRoot, "Install-FastLoop.ps1"),
+    "-BundleDirectory",
+    path.join(portableRoot, "FastLoop"),
+    "-InstallRoot",
+    path.join(validationRoot, "missing-helper-install", "FastLoop"),
+    "-RegistryBasePath",
+    `${registryBasePath}\\MissingHelper`,
+    "-LogDirectory",
+    missingHelperLogRoot
+  ],
+  {
+    cwd: workspaceRoot,
+    encoding: "utf8",
+    env: envOverrides
+  }
+);
+
+if (missingHelperInstall.status === 0) {
+  throw new Error("Install smoke expected a failure when the helper support script is missing.");
+}
+
+const missingHelperReportPath = path.join(missingHelperLogRoot, "install-latest.json");
+await access(missingHelperReportPath);
+const missingHelperReport = await parseJsonReport(missingHelperReportPath);
+assertField(
+  missingHelperReport.category === "helper-bootstrap-failed",
+  missingHelperReportPath,
+  "category",
+  `Expected helper-bootstrap-failed category, received ${String(missingHelperReport.category)}.`
+);
+
+const registryFailureInstall = spawnSync(
+  "powershell.exe",
+  [
+    "-NoProfile",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-File",
+    installScript,
+    "-BundleDirectory",
+    path.join(portableRoot, "FastLoop"),
+    "-InstallRoot",
+    path.join(validationRoot, "registry-failure-install", "FastLoop"),
+    "-RegistryBasePath",
+    "ZNOTREG:\\Software\\FastLoop",
+    "-LogDirectory",
+    registryFailureLogRoot
+  ],
+  {
+    cwd: workspaceRoot,
+    encoding: "utf8",
+    env: envOverrides
+  }
+);
+
+if (registryFailureInstall.status === 0) {
+  throw new Error("Install smoke expected a failure when registry writes cannot be performed.");
+}
+
+const registryFailureReportPath = path.join(registryFailureLogRoot, "install-latest.json");
+await access(registryFailureReportPath);
+const registryFailureReport = await parseJsonReport(registryFailureReportPath);
+assertField(
+  registryFailureReport.category === "registry-failed",
+  registryFailureReportPath,
+  "category",
+  `Expected registry-failed category, received ${String(registryFailureReport.category)}.`
+);
+
+await writeFile(blockedLogRootParent, "not a directory", "utf8");
+const blockedLogInstall = spawnSync(
+  "powershell.exe",
+  [
+    "-NoProfile",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-File",
+    installScript,
+    "-BundleDirectory",
+    path.join(portableRoot, "FastLoop"),
+    "-InstallRoot",
+    path.join(validationRoot, "blocked-log-install", "FastLoop"),
+    "-RegistryBasePath",
+    `${registryBasePath}\\BlockedLog`,
+    "-LogDirectory",
+    path.join(blockedLogRootParent, "child")
+  ],
+  {
+    cwd: workspaceRoot,
+    encoding: "utf8",
+    env: envOverrides
+  }
+);
+
+if (blockedLogInstall.status === 0) {
+  throw new Error("Install smoke expected a failure when the log directory cannot be created.");
+}
 
 const invalidPathLogRoot = path.join(validationRoot, "logs-invalid-paths");
 const invalidPathBundle = path.join(validationRoot, "invalid-path-bundle", "FastLoop");
@@ -399,7 +618,7 @@ await writeFile(
 );
 
 const invalidPathInstall = spawnSync(
-  "powershell",
+  "powershell.exe",
   [
     "-NoProfile",
     "-ExecutionPolicy",
@@ -446,6 +665,10 @@ console.log(
       readiness: readiness.trim(),
       conflictExitCode: conflictReadiness.status,
       failureExitCode: failedInstall.status,
+      missingPayloadExitCode: missingPayloadInstall.status,
+      missingHelperExitCode: missingHelperInstall.status,
+      registryFailureExitCode: registryFailureInstall.status,
+      blockedLogExitCode: blockedLogInstall.status,
       invalidPathExitCode: invalidPathInstall.status
     },
     null,

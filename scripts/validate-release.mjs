@@ -29,13 +29,40 @@ for (const filePath of [
   await access(filePath);
 }
 
+for (const filePath of [
+  path.join(manifest.artifacts.installerStage, "FastLoop-Windows-x64.zip"),
+  path.join(manifest.artifacts.installerStage, "Install-FastLoop.ps1"),
+  path.join(manifest.artifacts.installerStage, "Install-FastLoop.cmd"),
+  path.join(manifest.artifacts.installerStage, "FastLoop-CEPCommon.ps1"),
+  path.join(manifest.artifacts.installerStage, "Test-FastLoop-HostReadiness.ps1")
+]) {
+  await access(filePath);
+}
+
+const innoScriptContent = await readFile(innoSetupScript, "utf8");
+for (const expectedSnippet of [
+  "setup-latest.log",
+  "setup-latest.json",
+  "setup-helper-stdout.log",
+  "setup-helper-stderr.log",
+  "FastLoop-Windows-x64.zip",
+  "Install-FastLoop.cmd",
+  "BuildInstallCmdArgs",
+  "DetectFailureCategory",
+  "Recovery"
+]) {
+  if (!innoScriptContent.includes(expectedSnippet)) {
+    throw new Error(`Windows setup script is missing expected diagnostic support: ${expectedSnippet}`);
+  }
+}
+
 const validationRoot = path.join(workspaceRoot, "release", "build", "validation", `FastLoop-${version}`);
 const portableExtractRoot = path.join(validationRoot, "portable-extract");
 await rm(validationRoot, { recursive: true, force: true });
 await mkdir(portableExtractRoot, { recursive: true });
 
 execFileSync(
-  "powershell",
+  "powershell.exe",
   [
     "-NoProfile",
     "-Command",
@@ -123,7 +150,7 @@ await mkdir(installLogRoot, { recursive: true });
 
 try {
   execFileSync(
-    "powershell",
+    "powershell.exe",
     [
       "-NoProfile",
       "-ExecutionPolicy",

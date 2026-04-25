@@ -65,8 +65,8 @@ if (!existsSync(runtimeExecutable)) {
 
 function runPowerShell(command) {
   execFileSync(
-    "powershell",
-    ["-NoProfile", "-Command", command],
+    "powershell.exe",
+    ["-NoProfile", "-Command", `$ErrorActionPreference = 'Stop'; ${command}`],
     {
       cwd: workspaceRoot,
       stdio: "inherit"
@@ -272,6 +272,7 @@ await runPowerShellWithRetries(
 );
 
 await cp(path.join(portableRoot, "Install-FastLoop.ps1"), path.join(installerStageRoot, "Install-FastLoop.ps1"));
+await cp(path.join(portableRoot, "Install-FastLoop.cmd"), path.join(installerStageRoot, "Install-FastLoop.cmd"));
 await cp(path.join(portableRoot, "FastLoop-CEPCommon.ps1"), path.join(installerStageRoot, "FastLoop-CEPCommon.ps1"));
 await cp(path.join(portableRoot, "Test-FastLoop-HostReadiness.ps1"), path.join(installerStageRoot, "Test-FastLoop-HostReadiness.ps1"));
 await cp(path.join(portableRoot, "INSTALL.md"), path.join(installerStageRoot, "INSTALL.md"));
