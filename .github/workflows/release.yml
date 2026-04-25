@@ -46,11 +46,25 @@ jobs:
         shell: pwsh
         run: |
           choco install innosetup --no-progress -y
-          $innoPath = "${env:ProgramFiles(x86)}\Inno Setup 6"
-          if (Test-Path "$innoPath\ISCC.exe") {
-            Add-Content $env:GITHUB_PATH $innoPath
+          $chocoExit = $LASTEXITCODE
+          if (@(0, 3010) -notcontains $chocoExit) {
+            throw "Chocolatey failed to install Inno Setup. Exit code: $chocoExit"
           }
-          & "$innoPath\ISCC.exe" /?
+
+          $candidateCompilers = @(
+            "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+            "${env:ProgramFiles}\Inno Setup 6\ISCC.exe",
+            (Get-Command ISCC.exe -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source -First 1)
+          ) | Where-Object { $_ }
+          $compiler = $candidateCompilers | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $compiler) {
+            throw "ISCC.exe was not found after installing Inno Setup."
+          }
+
+          $compilerDir = Split-Path -Parent $compiler
+          Add-Content $env:GITHUB_PATH $compilerDir
+          Write-Host "Using Inno Setup compiler at $compiler"
+          Write-Host "Inno Setup version: $((Get-Item $compiler).VersionInfo.ProductVersion)"
 
       - name: Validate workflow YAML
         run: |
