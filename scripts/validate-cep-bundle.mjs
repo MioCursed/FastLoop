@@ -77,11 +77,11 @@ for (const relativePath of [
   await access(path.join(workspaceRoot, relativePath));
 }
 
-if (mainPath !== "../dist/index.html") {
+if (mainPath !== "./dist/index.html") {
   throw new Error(`Unexpected MainPath: ${mainPath}`);
 }
 
-if (scriptPath !== "../host-index.jsx") {
+if (scriptPath !== "./host-index.jsx") {
   throw new Error(`Unexpected ScriptPath: ${scriptPath}`);
 }
 
