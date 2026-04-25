@@ -91,6 +91,12 @@ const extensionVersion = readAttribute(
 const mainPath = readAttribute(manifestXml, /<MainPath>([^<]+)<\/MainPath>/, "MainPath");
 const scriptPath = readAttribute(manifestXml, /<ScriptPath>([^<]+)<\/ScriptPath>/, "ScriptPath");
 const menuLabel = readAttribute(manifestXml, /<Menu>([^<]+)<\/Menu>/, "Menu");
+const requiredMainPath = "./dist/index.html";
+const requiredScriptPath = "./host-index.jsx";
+const requiredHostScriptTargets = new Set([
+  "host-premiere/jsx/fastloop_premiere.jsx",
+  "host-aftereffects/jsx/fastloop_aftereffects.jsx"
+]);
 
 if (extensionBundleId !== "com.fastloop.panel") {
   throw new Error(`Unexpected ExtensionBundleId: ${extensionBundleId}`);
@@ -141,6 +147,14 @@ const expectedMainPath = path.join(projectedBundleRoot, "dist", "index.html");
 const expectedScriptPath = path.join(projectedBundleRoot, "host-index.jsx");
 const expectedScriptSourcePath = resolveSourcePathForBundlePath("ScriptPath", scriptPath);
 
+if (mainPath !== requiredMainPath) {
+  throw new Error(`MainPath must be ${requiredMainPath}, got: ${mainPath}`);
+}
+
+if (scriptPath !== requiredScriptPath) {
+  throw new Error(`ScriptPath must be ${requiredScriptPath}, got: ${scriptPath}`);
+}
+
 if (resolvedMainPath !== expectedMainPath) {
   throw new Error(`MainPath must resolve to dist/index.html inside the CEP bundle, got: ${mainPath} -> ${resolvedMainPath}`);
 }
@@ -168,12 +182,24 @@ const loadHostScriptTargets = Array.from(
 );
 
 for (const target of loadHostScriptTargets) {
-  const resolvedTarget = resolveBundlePath(`loadHostScript(${target})`, target);
+  resolveBundlePath(`loadHostScript(${target})`, target);
   const resolvedSourceTarget = resolveSourcePathForBundlePath(`loadHostScript(${target})`, target);
   try {
     await access(resolvedSourceTarget);
   } catch {
     throw new Error(`loadHostScript target source does not exist: ${target} -> ${resolvedSourceTarget}`);
+  }
+}
+
+for (const requiredTarget of requiredHostScriptTargets) {
+  if (!loadHostScriptTargets.includes(requiredTarget)) {
+    throw new Error(`host-index.jsx must load ${requiredTarget} from inside the CEP bundle.`);
+  }
+}
+
+for (const target of loadHostScriptTargets) {
+  if (!requiredHostScriptTargets.has(target)) {
+    throw new Error(`Unexpected host-index.jsx loadHostScript target: ${target}`);
   }
 }
 

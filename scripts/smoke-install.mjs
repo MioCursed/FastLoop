@@ -1,4 +1,4 @@
-import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { access, cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { execFileSync, spawnSync } from "node:child_process";
 import path from "node:path";
 
@@ -112,6 +112,20 @@ for (const filePath of [
   await access(filePath);
 }
 
+const installReportPath = path.join(logRoot, "install-latest.json");
+const installReport = await parseJsonReport(installReportPath);
+const installedRegistryVersions = Array.isArray(installReport.registryAfter)
+  ? installReport.registryAfter.map((entry) => String(entry?.CsxsVersion ?? ""))
+  : [];
+for (const csxsVersion of ["11", "12", "13"]) {
+  assertField(
+    installedRegistryVersions.includes(csxsVersion),
+    installReportPath,
+    `registryAfter[CsxsVersion=${csxsVersion}]`,
+    "Expected installer readiness logs to include this CEP PlayerDebugMode generation."
+  );
+}
+
 const readiness = execFileSync(
   "powershell",
   [
@@ -142,6 +156,9 @@ const readinessReport = await parseJsonReport(readinessReportPath);
 const healthyHostReadiness = Array.isArray(readinessReport.hostReadiness) ? readinessReport.hostReadiness : [];
 const healthyPpro = healthyHostReadiness.find((entry) => entry?.HostName === "PPRO");
 const healthyAeft = healthyHostReadiness.find((entry) => entry?.HostName === "AEFT");
+const readinessRegistryVersions = Array.isArray(readinessReport.registryState)
+  ? readinessReport.registryState.map((entry) => String(entry?.CsxsVersion ?? ""))
+  : [];
 
 assertField(
   Boolean(healthyPpro),
@@ -179,6 +196,14 @@ assertField(
   "higherPriorityConflicts",
   `Expected empty array in healthy scenario, found ${readinessReport.higherPriorityConflicts.length} entr${readinessReport.higherPriorityConflicts.length === 1 ? "y" : "ies"}.`
 );
+for (const csxsVersion of ["11", "12", "13"]) {
+  assertField(
+    readinessRegistryVersions.includes(csxsVersion),
+    readinessReportPath,
+    `registryState[CsxsVersion=${csxsVersion}]`,
+    "Expected readiness report to include this CEP PlayerDebugMode generation."
+  );
+}
 
 execFileSync(
   "powershell",
@@ -359,6 +384,59 @@ if (failedInstall.status === 0) {
 await access(path.join(failureLogRoot, "install-latest.json"));
 await access(path.join(failureLogRoot, "install-latest.log"));
 
+const invalidPathLogRoot = path.join(validationRoot, "logs-invalid-paths");
+const invalidPathBundle = path.join(validationRoot, "invalid-path-bundle", "FastLoop");
+await mkdir(invalidPathLogRoot, { recursive: true });
+await cp(path.join(portableRoot, "FastLoop"), invalidPathBundle, { recursive: true });
+const invalidPathManifestPath = path.join(invalidPathBundle, "CSXS", "manifest.xml");
+const invalidPathManifest = await readFile(invalidPathManifestPath, "utf8");
+await writeFile(
+  invalidPathManifestPath,
+  invalidPathManifest
+    .replace("<MainPath>./dist/index.html</MainPath>", "<MainPath>../dist/index.html</MainPath>")
+    .replace("<ScriptPath>./host-index.jsx</ScriptPath>", "<ScriptPath>../host-index.jsx</ScriptPath>"),
+  "utf8"
+);
+
+const invalidPathInstall = spawnSync(
+  "powershell",
+  [
+    "-NoProfile",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-File",
+    installScript,
+    "-BundleDirectory",
+    invalidPathBundle,
+    "-InstallRoot",
+    path.join(validationRoot, "invalid-path-install", "FastLoop"),
+    "-RegistryBasePath",
+    `${registryBasePath}\\InvalidPaths`,
+    "-LogDirectory",
+    invalidPathLogRoot
+  ],
+  {
+    cwd: workspaceRoot,
+    encoding: "utf8",
+    env: envOverrides
+  }
+);
+
+if (invalidPathInstall.status === 0) {
+  throw new Error("Install smoke expected a failure when manifest resource paths escape the bundle.");
+}
+
+const invalidPathReportPath = path.join(invalidPathLogRoot, "install-latest.json");
+await access(invalidPathReportPath);
+const invalidPathReport = await parseJsonReport(invalidPathReportPath);
+assertField(
+  String(invalidPathReport.error ?? "").includes("MainPath") ||
+    String(invalidPathReport.error ?? "").includes("ScriptPath"),
+  invalidPathReportPath,
+  "error",
+  "Expected invalid manifest resource paths to be reported as validation errors."
+);
+
 console.log(
   JSON.stringify(
     {
@@ -367,7 +445,8 @@ console.log(
       allUsersInstallRoot,
       readiness: readiness.trim(),
       conflictExitCode: conflictReadiness.status,
-      failureExitCode: failedInstall.status
+      failureExitCode: failedInstall.status,
+      invalidPathExitCode: invalidPathInstall.status
     },
     null,
     2

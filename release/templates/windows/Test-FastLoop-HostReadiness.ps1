@@ -48,6 +48,8 @@ try {
         ResolvedScriptPath = $check.ResolvedScriptPath
         ResolvedMainPathMissing = $check.ResolvedMainPathMissing
         ResolvedScriptPathMissing = $check.ResolvedScriptPathMissing
+        ManifestMainPathUnexpected = $check.ManifestMainPathUnexpected
+        ManifestScriptPathUnexpected = $check.ManifestScriptPathUnexpected
         ManifestSummary = $check.ManifestSummary
       }
     })
