@@ -15,6 +15,6 @@
   // Host routing still occurs from the panel bridge via CSInterface host IDs
   // (PPRO / AEFT), but loading both namespaces here avoids brittle dependence
   // on localized/non-standard app.name strings.
-  loadHostScript("../host-premiere/jsx/fastloop_premiere.jsx");
-  loadHostScript("../host-aftereffects/jsx/fastloop_aftereffects.jsx");
+  loadHostScript("host-premiere/jsx/fastloop_premiere.jsx");
+  loadHostScript("host-aftereffects/jsx/fastloop_aftereffects.jsx");
 })();

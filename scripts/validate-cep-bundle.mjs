@@ -27,17 +27,54 @@ const manifestPath = path.join(workspaceRoot, "panel", "CSXS", "manifest.xml");
 const manifestXml = await readFile(manifestPath, "utf8");
 const normalizedVersion = toCepManifestVersion(packageJson.version ?? "0.0.0");
 const bundleRoot = path.resolve(workspaceRoot, "panel");
+const projectedBundleRoot = path.resolve(workspaceRoot, "__fastloop_projected_cep_bundle__");
 
-function assertInsideBundle(label, resolvedPath) {
-  if (resolvedPath !== bundleRoot && !resolvedPath.startsWith(`${bundleRoot}${path.sep}`)) {
+function assertInsideProjectedBundle(label, resolvedPath) {
+  if (resolvedPath !== projectedBundleRoot && !resolvedPath.startsWith(`${projectedBundleRoot}${path.sep}`)) {
     throw new Error(`${label} resolves outside bundle root: ${resolvedPath}`);
   }
 }
 
+function assertCepRelativePath(label, relativePath) {
+  if (!relativePath || !relativePath.trim()) {
+    throw new Error(`${label} must not be empty.`);
+  }
+  if ([...relativePath.matchAll(/(^|[\\/])\.\.([\\/]|$)/g)].length > 0) {
+    throw new Error(`${label} must not use '..' path segments: ${relativePath}`);
+  }
+  if (path.isAbsolute(relativePath) || /^[A-Za-z]:[\\/]/.test(relativePath)) {
+    throw new Error(`${label} must be relative to the CEP bundle root: ${relativePath}`);
+  }
+}
+
 function resolveBundlePath(label, relativePath) {
-  const resolvedPath = path.resolve(bundleRoot, relativePath);
-  assertInsideBundle(label, resolvedPath);
+  assertCepRelativePath(label, relativePath);
+  const resolvedPath = path.resolve(projectedBundleRoot, relativePath);
+  assertInsideProjectedBundle(label, resolvedPath);
   return resolvedPath;
+}
+
+function resolveSourcePathForBundlePath(label, relativePath) {
+  assertCepRelativePath(label, relativePath);
+  const normalized = relativePath.replace(/^[.][\\/]/, "").replaceAll("\\", "/");
+  const segments = normalized.split("/").filter(Boolean);
+  const firstSegment = segments[0];
+  const rest = segments.slice(1);
+
+  if (firstSegment === "dist") {
+    return path.join(workspaceRoot, "panel", "dist", ...rest);
+  }
+  if (firstSegment === "CSXS") {
+    return path.join(workspaceRoot, "panel", "CSXS", ...rest);
+  }
+  if (firstSegment === "host-index.jsx") {
+    return path.join(workspaceRoot, "panel", "host-index.jsx");
+  }
+  if (firstSegment === "host-premiere" || firstSegment === "host-aftereffects") {
+    return path.join(workspaceRoot, firstSegment, ...rest);
+  }
+
+  throw new Error(`${label} does not map to a known release bundle source: ${relativePath}`);
 }
 
 const extensionBundleId = readAttribute(manifestXml, /ExtensionBundleId="([^"]+)"/, "ExtensionBundleId");
@@ -100,21 +137,23 @@ for (const relativePath of [
 
 const resolvedMainPath = resolveBundlePath("MainPath", mainPath);
 const resolvedScriptPath = resolveBundlePath("ScriptPath", scriptPath);
-const expectedMainPath = path.join(bundleRoot, "dist", "index.html");
-const expectedScriptPath = path.join(bundleRoot, "host-index.jsx");
+const expectedMainPath = path.join(projectedBundleRoot, "dist", "index.html");
+const expectedScriptPath = path.join(projectedBundleRoot, "host-index.jsx");
+const expectedScriptSourcePath = resolveSourcePathForBundlePath("ScriptPath", scriptPath);
 
 if (resolvedMainPath !== expectedMainPath) {
-  throw new Error(`MainPath must resolve to panel/dist/index.html, got: ${mainPath} -> ${resolvedMainPath}`);
+  throw new Error(`MainPath must resolve to dist/index.html inside the CEP bundle, got: ${mainPath} -> ${resolvedMainPath}`);
 }
 
 if (resolvedScriptPath !== expectedScriptPath) {
-  throw new Error(`ScriptPath must resolve to panel/host-index.jsx, got: ${scriptPath} -> ${resolvedScriptPath}`);
+  throw new Error(`ScriptPath must resolve to host-index.jsx inside the CEP bundle, got: ${scriptPath} -> ${resolvedScriptPath}`);
 }
 
-for (const [label, target] of [
-  ["MainPath target", resolvedMainPath],
-  ["ScriptPath target", resolvedScriptPath]
+for (const [label, relativePath] of [
+  ["MainPath target", mainPath],
+  ["ScriptPath target", scriptPath]
 ]) {
+  const target = resolveSourcePathForBundlePath(label, relativePath);
   try {
     await access(target);
   } catch {
@@ -122,7 +161,7 @@ for (const [label, target] of [
   }
 }
 
-const hostIndexSource = await readFile(expectedScriptPath, "utf8");
+const hostIndexSource = await readFile(expectedScriptSourcePath, "utf8");
 const loadHostScriptTargets = Array.from(
   hostIndexSource.matchAll(/loadHostScript\(\s*["']([^"']+)["']\s*\)/g),
   (match) => match[1]
@@ -130,10 +169,11 @@ const loadHostScriptTargets = Array.from(
 
 for (const target of loadHostScriptTargets) {
   const resolvedTarget = resolveBundlePath(`loadHostScript(${target})`, target);
+  const resolvedSourceTarget = resolveSourcePathForBundlePath(`loadHostScript(${target})`, target);
   try {
-    await access(resolvedTarget);
+    await access(resolvedSourceTarget);
   } catch {
-    throw new Error(`loadHostScript target does not exist: ${target} -> ${resolvedTarget}`);
+    throw new Error(`loadHostScript target source does not exist: ${target} -> ${resolvedSourceTarget}`);
   }
 }
 

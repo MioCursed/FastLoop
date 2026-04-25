@@ -1,6 +1,6 @@
 {
   "name": "fastloop",
-  "version": "0.1.1-beta.3",
+  "version": "0.1.1-beta.4",
   "private": true,
   "description": "Adobe CEP extension scaffold for editor-focused loop analysis in Premiere Pro and After Effects.",
   "workspaces": [

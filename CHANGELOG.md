@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1-beta.4
+
+- fixes CEP bundle path resolution so `MainPath`, `ScriptPath`, and host adapter loads stay inside the installed FastLoop bundle
+- tightens CEP validation around manifest resource paths and host adapter source mapping
+- keeps unsigned CEP readiness coverage for CSXS 11, CSXS 12, and CSXS 13
+
 ## 0.1.1-beta.3
 
 - adds a visual installer panel flow for Windows install (`-UseInstallerPanel`) with guided scope/options
