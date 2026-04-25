@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.1.1-beta.7
+
+- replaces the IExpress-style setup wrapper with an Inno Setup Windows x64 wizard
+- adds English and Brazilian Portuguese installer language support, license/terms, install options, additional tasks, progress, and completion actions
+- keeps the tested PowerShell CEP install helper as the authority for bundle copy, PlayerDebugMode, logs, and verification
+- validates the Inno installer asset, portable fallback zip, checksums, release manifest, packaged helper scripts, and package hygiene
+- documents the new setup wizard flow, logs, CurrentUser vs AllUsers behavior, and zip fallback path
+- performs the post-redesign QA pass for beta.6 functionality, layout, CEP rendering, packaged runtime, install, and release artifacts
+- adds repository size auditing and ignores generated release/build/smoke outputs so release assets stay in GitHub Releases instead of the repo
+- removes previously tracked generated release and smoke artifacts from version control while preserving source, templates, installers, host adapters, and release scripts
+- strengthens release validation around installer assets, checksums, package contents, and generated-artifact hygiene
+
+## 0.1.1-beta.6
+
+- redesigns the CEP panel into a dense Shutter Encoder-inspired utility layout for FastLoop loop analysis
+- preserves choose, analyze, duration/scoring, candidate selection, preview, export, marker, commit, mock, and host bridge workflows
+- keeps the existing architecture, CEP load paths, release packaging, and install logic unchanged
+
 ## 0.1.1-beta.5
 
 - emits CEP-safe relative Vite assets from the panel build

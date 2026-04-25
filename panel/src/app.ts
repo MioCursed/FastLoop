@@ -15,6 +15,18 @@ interface MountOptions {
 }
 
 const EXPORT_DIRECTORY_STORAGE_KEY = "fastloop.exportDirectory";
+const PANEL_VERSION = "0.1.1-beta.7";
+
+type FunctionMode = "analyze" | "finder" | "preview" | "export" | "bed" | "commit";
+
+const FUNCTION_MODES: Array<{ id: FunctionMode; label: string }> = [
+  { id: "analyze", label: "Analyze" },
+  { id: "finder", label: "Loop Finder" },
+  { id: "preview", label: "Preview" },
+  { id: "export", label: "Export" },
+  { id: "bed", label: "Build Bed" },
+  { id: "commit", label: "Commit" }
+];
 
 function escapeHtml(value: string): string {
   return value
@@ -264,7 +276,149 @@ function renderExecutionBlock(state: PanelState): string {
   `;
 }
 
-function render(state: PanelState): string {
+function hostLabel(state: PanelState): string {
+  switch (state.host?.host) {
+    case "premiere":
+      return "Premiere Pro";
+    case "aftereffects":
+      return "After Effects";
+    case "unknown":
+      return "Mock / Desktop";
+    default:
+      return "Loading";
+  }
+}
+
+function hostReadiness(state: PanelState): string {
+  if (!state.host) {
+    return "Detecting host bridge";
+  }
+  if (state.host.markers.available || state.host.exportHandOff.available) {
+    return "Host bridge ready";
+  }
+  return "Host bridge unavailable";
+}
+
+function primaryActionLabel(activeFunction: FunctionMode): string {
+  switch (activeFunction) {
+    case "preview":
+      return "Preview Selected Loop";
+    case "export":
+    case "bed":
+      return "Export Selected Loop";
+    case "commit":
+      return "Commit to Host";
+    default:
+      return "Analyze Track";
+  }
+}
+
+function primaryActionDisabled(
+  state: PanelState,
+  activeFunction: FunctionMode,
+  canActOnCandidate: boolean
+): string {
+  if ((activeFunction === "analyze" || activeFunction === "finder") && state.analysisStatus === "loading") {
+    return "disabled";
+  }
+  if (activeFunction === "preview" && (!canActOnCandidate || state.previewStatus === "running")) {
+    return "disabled";
+  }
+  if ((activeFunction === "export" || activeFunction === "bed") && (!canActOnCandidate || state.exportStatus === "running")) {
+    return "disabled";
+  }
+  if (activeFunction === "commit" && (!canActOnCandidate || state.commitStatus === "running")) {
+    return "disabled";
+  }
+  return "";
+}
+
+function renderOutputDock(state: PanelState): string {
+  const exportResult = state.lastExport;
+  const preview = state.lastPreview;
+  return `
+    <section class="output-pane">
+      <div class="dock-title">Output / Destination</div>
+      <div class="output-grid">
+        <label class="output-field">
+          <span>Destination</span>
+          <input
+            id="export-directory-input"
+            type="text"
+            value="${escapeHtml(state.exportDirectory)}"
+            placeholder="Default .fastloop-output"
+          />
+        </label>
+        <div class="output-field readonly">
+          <span>Preview WAV</span>
+          <strong>${preview ? escapeHtml(preview.previewFilePath) : "No preview rendered"}</strong>
+        </div>
+        <div class="output-field readonly">
+          <span>Intro</span>
+          <strong>${exportResult ? escapeHtml(exportResult.artifacts.introPath) : "--"}</strong>
+        </div>
+        <div class="output-field readonly">
+          <span>Loop</span>
+          <strong>${exportResult ? escapeHtml(exportResult.artifacts.loopPath) : "--"}</strong>
+        </div>
+        <div class="output-field readonly">
+          <span>Outro</span>
+          <strong>${exportResult ? escapeHtml(exportResult.artifacts.outroPath) : "--"}</strong>
+        </div>
+        <div class="output-field readonly">
+          <span>Extended Bed</span>
+          <strong>${exportResult ? escapeHtml(exportResult.artifacts.extendedMixPath) : "--"}</strong>
+        </div>
+        <div class="output-field readonly">
+          <span>Metadata JSON</span>
+          <strong>${exportResult ? escapeHtml(exportResult.artifacts.metadataPath) : "--"}</strong>
+        </div>
+      </div>
+    </section>
+    <section class="log-pane">
+      <div class="dock-title">Progress / Log</div>
+      <div class="log-row ${state.analysisStatus === "loading" ? "loading" : state.errorMessage ? "error" : "success"}">
+        <span>Panel</span>
+        <strong>${escapeHtml(state.errorMessage ?? state.statusMessage ?? "Ready.")}</strong>
+      </div>
+      <div class="log-row">
+        <span>Analysis</span>
+        <strong>${state.analysisStatus}</strong>
+      </div>
+      <div class="log-row">
+        <span>Preview</span>
+        <strong>${state.previewStatus}</strong>
+      </div>
+      <div class="log-row">
+        <span>Export</span>
+        <strong>${state.exportStatus}</strong>
+      </div>
+      <div class="log-row">
+        <span>Commit</span>
+        <strong>${state.commitStatus}</strong>
+      </div>
+      ${
+        state.queue.length
+          ? state.queue
+              .map(
+                (item) => `
+                  <div class="queue-row">
+                    <span>${escapeHtml(item.trackId)}</span>
+                    <span>${item.status}</span>
+                    <span>${item.durationTargetSeconds}s</span>
+                    <span>${item.candidateCount}</span>
+                    <span>${item.exportState}</span>
+                  </div>
+                `
+              )
+              .join("")
+          : '<div class="queue-row empty-row">No queued tasks yet.</div>'
+      }
+    </section>
+  `;
+}
+
+function render(state: PanelState, activeFunction: FunctionMode): string {
   const track = selectedTrack(state);
   const candidate = selectedCandidate(state);
   const analysis = state.analysis;
@@ -272,74 +426,107 @@ function render(state: PanelState): string {
   const canActOnCandidate = Boolean(candidate && track);
 
   return `
-    <div class="shell">
+    <div class="shell utility-shell">
       <header class="topbar">
         <div class="title-block">
-          <strong>FastLoop</strong>
-          <span class="host-pill">${state.host?.host ?? "loading"}</span>
+          <div class="product-mark">FL</div>
+          <div>
+            <strong>FastLoop</strong>
+            <span>v${PANEL_VERSION}</span>
+          </div>
+          <span class="host-pill">${hostLabel(state)}</span>
+          <span class="status-pill ${state.errorMessage ? "error" : state.analysisStatus === "loading" ? "running" : "success"}">
+            ${state.errorMessage ? "Attention" : state.analysisStatus === "loading" ? "Working" : "Ready"}
+          </span>
         </div>
         <div class="toolbar">
-          <button id="choose-track-button">Choose Audio</button>
+          <button id="choose-track-button">Add Audio</button>
           <button id="focus-path-button">Track Path</button>
-          <button id="analyze-button" ${state.analysisStatus === "loading" ? "disabled" : ""}>Analyze Track</button>
-          <button id="preview-button" ${canActOnCandidate && state.previewStatus !== "running" ? "" : "disabled"}>Preview Seamless Loop</button>
-          <button id="export-button" ${canActOnCandidate && state.exportStatus !== "running" ? "" : "disabled"}>Export</button>
-          <button id="commit-button" ${canActOnCandidate && state.commitStatus !== "running" ? "" : "disabled"}>Commit Candidate</button>
-          <button id="place-markers-button" ${canActOnCandidate ? "" : "disabled"}>Place Markers</button>
+          <button id="sidebar-choose-output-button">Output Folder</button>
           <button disabled>Settings</button>
         </div>
       </header>
       <main class="workspace">
-        <aside class="sidebar">
-          <nav class="nav">
-            <button class="nav-item active">Library</button>
-            <button class="nav-item">Analyze</button>
-            <button class="nav-item">Candidates</button>
-            <button class="nav-item">Build Bed</button>
-            <button class="nav-item">Export</button>
-            <button class="nav-item">Queue</button>
-            <button class="nav-item">Presets</button>
-            <button class="nav-item">Settings</button>
-          </nav>
+        <aside class="sidebar input-column">
           <section class="panel-block">
-            <div class="block-title">Tracks</div>
+            <div class="block-title">
+              <span>Input Files</span>
+              <small>${state.tracks.length} slots</small>
+            </div>
+            <div class="input-queue">
             ${state.tracks
               .map(
                 (trackRow) => `
                   <button class="track-row ${trackRow.id === state.selectedTrackId ? "selected" : ""}" data-track-id="${trackRow.id}">
-                    <span>${escapeHtml(trackRow.name)}</span>
-                    <small>${trackRow.cacheState}</small>
+                    <span>
+                      <strong>${escapeHtml(trackRow.name)}</strong>
+                      <small>${escapeHtml(trackRow.sourcePath || "No source selected")}</small>
+                    </span>
+                    <em>${trackRow.cacheState}</em>
                   </button>
                 `
               )
               .join("")}
+            </div>
             <div class="button-row">
-              <button id="sidebar-choose-track-button">Choose Audio File</button>
-              <button id="sidebar-choose-output-button">Choose Export Folder</button>
+              <button id="sidebar-choose-track-button">Choose Audio</button>
+              <button disabled>Clear</button>
             </div>
             <label class="input-block">
-              <span>Selected Track Source</span>
+              <span>Selected Track Path</span>
               <input id="track-path-input" type="text" value="${escapeHtml(track?.sourcePath ?? "")}" placeholder="Paste a local audio path" />
-            </label>
-            <label class="input-block">
-              <span>Export Destination</span>
-              <input
-                id="export-directory-input"
-                type="text"
-                value="${escapeHtml(state.exportDirectory)}"
-                placeholder="Choose a folder or keep the default FastLoop output"
-              />
             </label>
             <div class="status-line ${state.analysisStatus === "loading" ? "loading" : state.errorMessage ? "error" : "success"}">
               <span>${escapeHtml(state.errorMessage ?? state.statusMessage ?? "Ready.")}</span>
             </div>
             ${renderWarnings(analysis?.warnings ?? [])}
           </section>
+          <section class="panel-block compact-block">
+            <div class="block-title">Host</div>
+            <div class="host-grid">
+              <span>Target</span><strong>${hostLabel(state)}</strong>
+              <span>Markers</span><strong>${state.host?.markers.available ? "Available" : "Unavailable"}</strong>
+              <span>Timeline</span><strong>${state.host?.timelineTiming.available ? "Premiere" : state.host?.compTiming.available ? "After Effects" : "Unavailable"}</strong>
+              <span>Handoff</span><strong>${state.host?.exportHandOff.available ? "Available" : "Unavailable"}</strong>
+            </div>
+          </section>
         </aside>
-        <section class="center">
+        <section class="center function-center">
+          <section class="function-panel">
+            <div class="mode-strip">
+              ${FUNCTION_MODES.map(
+                (mode) => `
+                  <button class="${activeFunction === mode.id ? "active" : ""}" data-function-mode="${mode.id}">
+                    ${mode.label}
+                  </button>
+                `
+              ).join("")}
+            </div>
+            <div class="primary-action-area">
+              <div>
+                <span class="overline">Active Function</span>
+                <strong>${primaryActionLabel(activeFunction)}</strong>
+              </div>
+              <button
+                id="primary-action-button"
+                class="primary-action"
+                data-primary-action="${activeFunction}"
+                ${primaryActionDisabled(state, activeFunction, canActOnCandidate)}
+              >
+                ${primaryActionLabel(activeFunction)}
+              </button>
+              <div class="secondary-actions">
+                <button id="analyze-button" ${state.analysisStatus === "loading" ? "disabled" : ""}>Analyze Track</button>
+                <button id="preview-button" ${canActOnCandidate && state.previewStatus !== "running" ? "" : "disabled"}>Preview</button>
+                <button id="export-button" ${canActOnCandidate && state.exportStatus !== "running" ? "" : "disabled"}>Export</button>
+                <button id="commit-button" ${canActOnCandidate && state.commitStatus !== "running" ? "" : "disabled"}>Commit</button>
+                <button id="place-markers-button" ${canActOnCandidate ? "" : "disabled"}>Place Markers</button>
+              </div>
+            </div>
+          </section>
           <section class="waveform-card">
             <div class="card-header">
-              <span>Waveform</span>
+              <span>Loop Analysis Work Area</span>
               <div class="segmented">
                 ${DURATION_PRESETS.map(
                   (preset) => `
@@ -351,7 +538,7 @@ function render(state: PanelState): string {
               </div>
             </div>
             <div class="card-header compact-header">
-              <span>Ranking Mode</span>
+              <span>Scoring Mode</span>
               <div class="segmented">
                 ${SCORING_MODE_PRESETS.map(
                   (preset) => `
@@ -387,27 +574,16 @@ function render(state: PanelState): string {
             <div class="action-strip">
               <span>Target Duration</span>
               <strong>${state.durationTargetSeconds}s</strong>
-              <label class="inline-input">
-                <span>Custom</span>
-                <input
-                  id="custom-duration-input"
-                  type="number"
-                  min="2"
-                  max="60"
-                  step="1"
-                  value="${escapeHtml(String(state.durationTargetSeconds))}"
-                />
-              </label>
               <div class="segmented">
                 <button class="${state.previewMode === "cycle" ? "active" : ""}" data-preview-mode="cycle">1 Cycle</button>
                 <button class="${state.previewMode === "repeat" ? "active" : ""}" data-preview-mode="repeat">Looping</button>
               </div>
-              <span class="muted">Preview renders a deterministic local file and attempts in-panel playback.</span>
+              <span class="muted">Preview renders a local WAV and attempts in-panel playback.</span>
             </div>
           </section>
           <section class="candidate-card">
             <div class="card-header">
-              <span>Ranked Candidates</span>
+              <span>Loop Candidate Table</span>
               <span class="muted">${track ? escapeHtml(track.name) : "No track selected"}</span>
             </div>
             <div class="candidate-header">
@@ -438,9 +614,40 @@ function render(state: PanelState): string {
             </div>
           </section>
         </section>
-        <aside class="inspector">
+        <aside class="inspector settings-column">
           <section class="panel-block">
-            <div class="block-title">Inspector</div>
+            <div class="block-title">Advanced Options</div>
+            <div class="settings-stack">
+              <label class="inline-input wide">
+                <span>Custom Duration</span>
+                <input
+                  id="custom-duration-input"
+                  type="number"
+                  min="2"
+                  max="60"
+                  step="1"
+                  value="${escapeHtml(String(state.durationTargetSeconds))}"
+                />
+              </label>
+              <div class="setting-row">
+                <span>Preview Mode</span>
+                <div class="segmented">
+                  <button class="${state.previewMode === "cycle" ? "active" : ""}" data-preview-mode="cycle">Cycle</button>
+                  <button class="${state.previewMode === "repeat" ? "active" : ""}" data-preview-mode="repeat">Repeat</button>
+                </div>
+              </div>
+              <div class="setting-row">
+                <span>Rerank</span>
+                <strong>${(analysis?.rerankEnabled ?? (state.scoringMode !== "transparent")) ? "Enabled" : "Transparent"}</strong>
+              </div>
+              <div class="setting-row">
+                <span>Host Status</span>
+                <strong>${hostReadiness(state)}</strong>
+              </div>
+            </div>
+          </section>
+          <section class="panel-block">
+            <div class="block-title">Candidate Inspector</div>
             <div class="metric-grid">
               <div><span>BPM</span><strong>${analysis?.bpm ?? "--"}</strong></div>
               <div><span>Bars</span><strong>${analysis?.bars ?? "--"}</strong></div>
@@ -460,7 +667,7 @@ function render(state: PanelState): string {
             </div>
           </section>
           <section class="panel-block">
-            <div class="block-title">Execution</div>
+            <div class="block-title">Preview / Export / Commit</div>
             ${renderExecutionBlock(state)}
           </section>
           <section class="panel-block">
@@ -470,24 +677,7 @@ function render(state: PanelState): string {
         </aside>
       </main>
       <footer class="queuebar">
-        <div class="queue-header">Queue</div>
-        ${
-          state.queue.length
-            ? state.queue
-                .map(
-                  (item) => `
-                    <div class="queue-row">
-                      <span>${escapeHtml(item.trackId)}</span>
-                      <span>${item.status}</span>
-                      <span>${item.durationTargetSeconds}s</span>
-                      <span>${item.candidateCount}</span>
-                      <span>${item.exportState}</span>
-                    </div>
-                  `
-                )
-                .join("")
-            : '<div class="queue-row empty-row">No queued tasks yet.</div>'
-        }
+        ${renderOutputDock(state)}
       </footer>
     </div>
   `;
@@ -504,6 +694,7 @@ export async function mountApp(root: HTMLElement, options?: MountOptions): Promi
   };
 
   let previewAudio: HTMLAudioElement | null = null;
+  let activeFunction: FunctionMode = "analyze";
 
   async function refreshCapabilities(): Promise<void> {
     state.host = await bridge.getHostCapabilities();
@@ -566,7 +757,7 @@ export async function mountApp(root: HTMLElement, options?: MountOptions): Promi
   }
 
   function renderApp(): void {
-    root.innerHTML = render(state);
+    root.innerHTML = render(state, activeFunction);
     bindEvents();
   }
 
@@ -833,6 +1024,29 @@ export async function mountApp(root: HTMLElement, options?: MountOptions): Promi
   }
 
   function bindEvents(): void {
+    root.querySelector("#primary-action-button")?.addEventListener("click", () => {
+      if (activeFunction === "preview") {
+        void previewSelectedCandidate();
+        return;
+      }
+      if (activeFunction === "export" || activeFunction === "bed") {
+        void exportSelectedCandidate();
+        return;
+      }
+      if (activeFunction === "commit") {
+        void commitSelectedCandidate();
+        return;
+      }
+      void analyzeSelectedTrack();
+    });
+
+    for (const button of root.querySelectorAll<HTMLButtonElement>("[data-function-mode]")) {
+      button.addEventListener("click", () => {
+        activeFunction = (button.dataset.functionMode as FunctionMode | undefined) ?? "analyze";
+        renderApp();
+      });
+    }
+
     root.querySelector("#choose-track-button")?.addEventListener("click", () => {
       void chooseTrackSource();
     });

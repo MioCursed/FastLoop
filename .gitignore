@@ -11,3 +11,8 @@ coverage/
 engine/.mypy_cache/
 engine/.pytest_cache/
 .fastloop-output/
+release/build/
+release/out/*
+!release/out/.gitkeep
+panel/.smoke-dist/
+mock/.smoke-dist/

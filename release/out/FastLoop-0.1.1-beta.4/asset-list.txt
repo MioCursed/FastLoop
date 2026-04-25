@@ -1,4 +1,0 @@
-C:\Users\Nataniel\Downloads\FastLoop\release\out\FastLoop-0.1.1-beta.4\FastLoop-Windows-x64-Setup.exe
-C:\Users\Nataniel\Downloads\FastLoop\release\out\FastLoop-0.1.1-beta.4\FastLoop-Windows-x64.zip
-C:\Users\Nataniel\Downloads\FastLoop\release\out\FastLoop-0.1.1-beta.4\SHA256SUMS.txt
-C:\Users\Nataniel\Downloads\FastLoop\release\out\FastLoop-0.1.1-beta.4\release-notes.md

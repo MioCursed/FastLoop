@@ -10,7 +10,8 @@
 - CEP extension bundle for Premiere Pro and After Effects
 - packaged Windows engine runtime so the standard release path does not require a manual Python install
 - analyze, preview, export, and commit workflow in the FastLoop panel
-- visual installer panel flow (`-UseInstallerPanel`) with scope and safety options
+- Inno Setup wizard with language, license, options, additional tasks, progress, and completion pages
+- portable script installer fallback (`Install-FastLoop.cmd`) with scope and safety options
 - host-load diagnostics that scan CEP logs and classify readiness evidence per host
 - release manifest, checksums, and install documentation aligned with the GitHub Releases workflow
 
@@ -18,9 +19,9 @@
 
 1. Open the GitHub Releases page.
 2. Download `FastLoop-Windows-x64-Setup.exe`.
-3. Run the installer.
+3. Run the setup wizard.
 4. Open Premiere Pro or After Effects.
-5. Launch the `FastLoop` panel and use it.
+5. Launch FastLoop from `Window > Extensions (Legacy) > FastLoop` or `Window > Extensions > FastLoop`.
 
 ## Notes
 

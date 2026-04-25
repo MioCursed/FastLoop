@@ -1,0 +1,19 @@
+FastLoop Prerelease License and Terms
+
+FastLoop is currently distributed as an unsigned prerelease build for testing
+and evaluation.
+
+Copyright (c) MioCursed / FastLoop contributors. All rights reserved unless a
+separate written license is provided by the project owner.
+
+You may install and use this prerelease build to evaluate FastLoop with Adobe
+Premiere Pro and Adobe After Effects. You may not sell, repackage, or
+redistribute FastLoop as your own product without permission from the project
+owner.
+
+FastLoop is provided "as is", without warranty of any kind. Because this is a
+prerelease Adobe CEP extension, install behavior and host compatibility may
+change before a production release.
+
+This placeholder terms file must be reviewed and replaced with the final
+project license before a production release.

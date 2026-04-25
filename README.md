@@ -16,6 +16,7 @@ GitHub Releases:
 - https://github.com/MioCursed/FastLoop/releases
 
 The Windows x64 installer is the primary download. The zip package is the secondary portable fallback.
+The setup executable is an Inno Setup wizard with language selection, welcome/about, license, destination/options, additional tasks, ready, progress, and completion pages.
 
 ## Current Status
 
@@ -28,8 +29,8 @@ The repository already includes a working release-first prerelease foundation:
 - file picker and export destination selection inside the panel
 - Premiere Pro and After Effects host payload flow for markers, commit, and initial rendered-asset handoff
 - packaged Windows engine runtime so end users do not need a manual Python install for the standard release path
-- release assets structured for GitHub Releases with a primary installer and secondary portable zip
-- visual installer-panel path, install verification, install logs, and host-readiness diagnostics for CEP visibility issues
+- release assets structured for GitHub Releases with a primary Inno Setup wizard and secondary portable zip
+- install verification, install logs, and host-readiness diagnostics for CEP visibility issues
 
 ## Installation
 
@@ -39,12 +40,14 @@ Short version:
 
 1. Open the GitHub Releases page.
 2. Download `FastLoop-Windows-x64-Setup.exe`.
-3. Run the installer.
+3. Run the setup wizard and keep the default CurrentUser CEP install unless you need AllUsers.
 4. Open Premiere Pro or After Effects.
 5. Check `Window > Extensions (Legacy) > FastLoop` on newer Adobe builds, or `Window > Extensions > FastLoop` on older builds.
 6. Use the panel.
 
 If you prefer not to run the installer, download `FastLoop-Windows-x64.zip`, extract it, and run the included install helper.
+
+See [docs/21-windows-installer-wizard.md](./docs/21-windows-installer-wizard.md) for the wizard page flow and option details.
 
 ## Included In Release Assets
 

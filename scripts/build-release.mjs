@@ -26,6 +26,8 @@ const runtimeExecutable = path.join(
 );
 const installerStageRoot = path.join(workspaceRoot, "release", "build", "installer", `FastLoop-${version}`);
 const templateRoot = path.join(workspaceRoot, "release", "templates", "windows");
+const innoSetupScript = path.join(workspaceRoot, "release", "installer", "windows", "FastLoop.iss");
+const licenseTermsPath = path.join(workspaceRoot, "release", "LICENSE-TERMS.txt");
 
 const requiredSources = [
   path.join(workspaceRoot, "panel", "dist", "index.html"),
@@ -41,6 +43,8 @@ const requiredSources = [
   path.join(workspaceRoot, "release", "CHECKLIST.md"),
   path.join(workspaceRoot, "release", "release-notes-template.md"),
   path.join(workspaceRoot, "release", "SIGNING.md"),
+  licenseTermsPath,
+  innoSetupScript,
   path.join(templateRoot, "FastLoop-CEPCommon.ps1"),
   path.join(templateRoot, "Install-FastLoop.ps1"),
   path.join(templateRoot, "Install-FastLoop.cmd"),
@@ -86,8 +90,54 @@ async function runPowerShellWithRetries(command, retries = 5, waitMs = 750) {
   }
 }
 
+async function removeWithRetries(targetPath, retries = 8, waitMs = 750) {
+  let lastError;
+  for (let attempt = 1; attempt <= retries; attempt += 1) {
+    try {
+      await rm(targetPath, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      lastError = error;
+      if (attempt === retries) {
+        throw lastError;
+      }
+      await delay(waitMs);
+    }
+  }
+}
+
 function renderPortableInstallScript(template, currentVersion) {
   return template.replaceAll("__FASTLOOP_VERSION__", currentVersion);
+}
+
+function findInnoSetupCompiler() {
+  const candidates = [
+    process.env.INNO_SETUP_COMPILER,
+    path.join(workspaceRoot, "release", "build", "tools", "Inno", "ISCC.exe"),
+    "ISCC.exe",
+    path.join(process.env["ProgramFiles(x86)"] ?? "", "Inno Setup 6", "ISCC.exe"),
+    path.join(process.env.ProgramFiles ?? "", "Inno Setup 6", "ISCC.exe")
+  ].filter(Boolean);
+
+  for (const candidate of candidates) {
+    if (path.isAbsolute(candidate) && existsSync(candidate)) {
+      return candidate;
+    }
+
+    if (!path.isAbsolute(candidate)) {
+      try {
+        execFileSync("where.exe", [candidate], {
+          cwd: workspaceRoot,
+          stdio: "ignore"
+        });
+        return candidate;
+      } catch {
+        // Try the next likely location.
+      }
+    }
+  }
+
+  return null;
 }
 
 function toCepManifestVersion(currentVersion) {
@@ -98,6 +148,15 @@ function toCepManifestVersion(currentVersion) {
 
   const [, major, minor, patch, prereleaseNumber] = match;
   return prereleaseNumber ? `${major}.${minor}.${patch}.${prereleaseNumber}` : `${major}.${minor}.${patch}`;
+}
+
+function toWindowsVersionInfo(currentVersion) {
+  const cepVersion = toCepManifestVersion(currentVersion);
+  const parts = cepVersion.split(".");
+  while (parts.length < 4) {
+    parts.push("0");
+  }
+  return parts.slice(0, 4).join(".");
 }
 
 function renderManifest(manifestSource, currentVersion) {
@@ -113,65 +172,13 @@ function renderReleaseNotes(template, currentVersion) {
   return template.replaceAll("__VERSION__", currentVersion);
 }
 
-function createInstallerBatch() {
-  return [
-    "@echo off",
-    "setlocal",
-    'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0Install-FastLoop.ps1" -PayloadZip "%~dp0FastLoop-Windows-x64.zip"',
-    "exit /b %ERRORLEVEL%"
-  ].join("\r\n");
-}
-
-function createSedFile({
-  friendlyName,
-  targetName,
-  sourceRoot
-}) {
-  return [
-    "[Version]",
-    "Class=IEXPRESS",
-    "SEDVersion=3",
-    "[Options]",
-    "PackagePurpose=InstallApp",
-    "ShowInstallProgramWindow=1",
-    "HideExtractAnimation=1",
-    "UseLongFileName=1",
-    "InsideCompressed=0",
-    "CAB_FixedSize=0",
-    "CAB_ResvCodeSigning=0",
-    "RebootMode=I",
-    "InstallPrompt=",
-    "DisplayLicense=",
-    "FinishMessage=FastLoop install command has completed. Review the console output and install log for verification details.",
-    `TargetName=${targetName}`,
-    `FriendlyName=${friendlyName}`,
-    "AppLaunched=Install-FastLoop.cmd",
-    "PostInstallCmd=<None>",
-    "AdminQuietInstCmd=Install-FastLoop.cmd",
-    "UserQuietInstCmd=Install-FastLoop.cmd",
-    "SourceFiles=SourceFiles",
-    "[Strings]",
-    'FILE0="FastLoop-Windows-x64.zip"',
-    'FILE1="Install-FastLoop.ps1"',
-    'FILE2="Install-FastLoop.cmd"',
-    'FILE3="FastLoop-CEPCommon.ps1"',
-    "[SourceFiles]",
-    `SourceFiles0=${sourceRoot}\\`,
-    "[SourceFiles0]",
-    "%FILE0%=",
-    "%FILE1%=",
-    "%FILE2%=",
-    "%FILE3%="
-  ].join("\r\n");
-}
-
 async function sha256(filePath) {
   const fileBuffer = await readFile(filePath);
   return createHash("sha256").update(fileBuffer).digest("hex");
 }
 
-await rm(releaseRoot, { recursive: true, force: true });
-await rm(installerStageRoot, { recursive: true, force: true });
+await removeWithRetries(releaseRoot);
+await removeWithRetries(installerStageRoot);
 await mkdir(extensionRoot, { recursive: true });
 await mkdir(installerStageRoot, { recursive: true });
 
@@ -205,6 +212,7 @@ await writeFile(
 await cp(path.join(workspaceRoot, "INSTALL.md"), path.join(portableRoot, "INSTALL.md"));
 await cp(path.join(workspaceRoot, "CHANGELOG.md"), path.join(portableRoot, "CHANGELOG.md"));
 await cp(path.join(workspaceRoot, "release", "TROUBLESHOOTING.md"), path.join(portableRoot, "TROUBLESHOOTING.md"));
+await cp(licenseTermsPath, path.join(portableRoot, "LICENSE-TERMS.txt"));
 
 await cp(path.join(workspaceRoot, "INSTALL.md"), path.join(releaseRoot, "INSTALL.md"));
 await cp(path.join(workspaceRoot, "README.md"), path.join(releaseRoot, "README.md"));
@@ -214,26 +222,26 @@ await cp(path.join(workspaceRoot, "release", "README.md"), path.join(releaseRoot
 await cp(path.join(workspaceRoot, "release", "CHECKLIST.md"), path.join(releaseRoot, "CHECKLIST.md"));
 await cp(path.join(workspaceRoot, "release", "SIGNING.md"), path.join(releaseRoot, "SIGNING.md"));
 await cp(path.join(workspaceRoot, "release", "signing.env.example"), path.join(releaseRoot, "signing.env.example"));
+await cp(licenseTermsPath, path.join(releaseRoot, "LICENSE-TERMS.txt"));
 
 await runPowerShellWithRetries(`Compress-Archive -Path '${portableRoot}\\*' -DestinationPath '${portableZipPath}' -Force`);
 
 await cp(path.join(portableRoot, "Install-FastLoop.ps1"), path.join(installerStageRoot, "Install-FastLoop.ps1"));
-await writeFile(path.join(installerStageRoot, "Install-FastLoop.cmd"), createInstallerBatch(), "utf8");
 await cp(path.join(portableRoot, "FastLoop-CEPCommon.ps1"), path.join(installerStageRoot, "FastLoop-CEPCommon.ps1"));
+await cp(path.join(portableRoot, "Test-FastLoop-HostReadiness.ps1"), path.join(installerStageRoot, "Test-FastLoop-HostReadiness.ps1"));
+await cp(path.join(portableRoot, "INSTALL.md"), path.join(installerStageRoot, "INSTALL.md"));
+await cp(path.join(portableRoot, "TROUBLESHOOTING.md"), path.join(installerStageRoot, "TROUBLESHOOTING.md"));
+await cp(path.join(portableRoot, "LICENSE-TERMS.txt"), path.join(installerStageRoot, "LICENSE-TERMS.txt"));
 await cp(portableZipPath, path.join(installerStageRoot, "FastLoop-Windows-x64.zip"));
 
-const sedPath = path.join(installerStageRoot, "FastLoop-Windows-x64-Setup.sed");
-await writeFile(
-  sedPath,
-  createSedFile({
-    friendlyName: `FastLoop ${version} Windows x64 Setup`,
-    targetName: installerPath,
-    sourceRoot: installerStageRoot
-  }),
-  "utf8"
-);
-
-execFileSync("iexpress.exe", ["/N", sedPath], {
+const innoCompiler = findInnoSetupCompiler();
+execFileSync(innoCompiler, [
+  `/DAppVersion=${version}`,
+  `/DAppVersionNumeric=${toWindowsVersionInfo(version)}`,
+  `/DSourceDir=${installerStageRoot}`,
+  `/DOutputDir=${releaseRoot}`,
+  innoSetupScript
+], {
   cwd: workspaceRoot,
   stdio: "inherit"
 });
@@ -284,6 +292,8 @@ const releaseManifest = {
     portableZip: portableZipPath,
     checksums: checksumsPath,
     releaseNotes: releaseNotesPath,
+    innoSetupScript,
+    installerStage: installerStageRoot,
     installGuide: path.join(releaseRoot, "INSTALL.md"),
     changelog: path.join(releaseRoot, "CHANGELOG.md"),
     troubleshootingGuide: path.join(releaseRoot, "TROUBLESHOOTING.md"),

@@ -22,6 +22,20 @@ If FastLoop installs but does not appear in Premiere Pro or After Effects, check
    - `HKEY_CURRENT_USER\Software\Adobe\CSXS.12\PlayerDebugMode = 1`
    - `HKEY_CURRENT_USER\Software\Adobe\CSXS.13\PlayerDebugMode = 1`
 
+## Setup Wizard Failure
+
+`FastLoop-Windows-x64-Setup.exe` is an Inno Setup wizard. During the installing
+page it calls the packaged `Install-FastLoop.ps1` helper and waits for that
+helper to finish verification. If the helper exits nonzero, the wizard reports
+failure instead of showing a fake success page.
+
+Check these logs first:
+
+- Inno Setup log: `%TEMP%\Setup Log*.txt`
+- FastLoop install log: `%LOCALAPPDATA%\FastLoop\Logs\install-latest.log`
+- FastLoop install summary: `%LOCALAPPDATA%\FastLoop\Logs\install-latest.json`
+- Readiness summary: `%LOCALAPPDATA%\FastLoop\Logs\host-readiness-latest.json`
+
 ## Installed and validated but not visible
 
 If the installer reports success but Premiere Pro still does not show FastLoop, treat it as a CEP load problem first.
@@ -59,11 +73,8 @@ If your environment consistently favors system CEP roots, reinstall with `-Prefe
 powershell -NoProfile -ExecutionPolicy Bypass -File .\Install-FastLoop.ps1 -PreferAllUsers
 ```
 
-Para abrir o instalador em modo painel visual (estilo wizard), execute:
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\Install-FastLoop.ps1 -UseInstallerPanel
-```
+The old portable visual panel remains available for fallback script installs,
+but the release installer is now the Inno Setup wizard.
 
 ## Built-In Readiness Check
 
