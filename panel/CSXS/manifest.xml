@@ -23,8 +23,8 @@
     <Extension Id="com.fastloop.panel.main">
       <DispatchInfo>
         <Resources>
-          <MainPath>../dist/index.html</MainPath>
-          <ScriptPath>../host-index.jsx</ScriptPath>
+          <MainPath>./dist/index.html</MainPath>
+          <ScriptPath>./host-index.jsx</ScriptPath>
           <CEFCommandLine>
             <Parameter>--enable-nodejs</Parameter>
           </CEFCommandLine>
