@@ -124,7 +124,7 @@ try {
 
   $registryBefore = Get-FastLoopUnsignedExtensionState -RegistryBasePath $RegistryBasePath
   if ($EnableUnsignedPanelSupport) {
-    Write-InstallLog -LogPath $installLogPath -Message "Enabling PlayerDebugMode for CEP 11 and CEP 12 under $RegistryBasePath"
+    Write-InstallLog -LogPath $installLogPath -Message "Enabling PlayerDebugMode for CEP 11, CEP 12, and CEP 13 under $RegistryBasePath"
     $null = Enable-FastLoopUnsignedExtensions -RegistryBasePath $RegistryBasePath
   } else {
     Write-InstallLog -LogPath $installLogPath -Message "Skipping unsigned CEP helper registry changes by request"

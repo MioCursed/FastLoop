@@ -128,7 +128,7 @@ function Show-FastLoopInstallerPanel(
   $form.Controls.Add($allowRunningHostsCheck)
 
   $unsignedSupportCheck = New-Object System.Windows.Forms.CheckBox
-  $unsignedSupportCheck.Text = "Ativar suporte a extensão não assinada (PlayerDebugMode CEP 11/12)"
+  $unsignedSupportCheck.Text = "Ativar suporte a extensão não assinada (PlayerDebugMode CEP 11/12/13)"
   $unsignedSupportCheck.Location = New-Object System.Drawing.Point(20, 246)
   $unsignedSupportCheck.Size = New-Object System.Drawing.Size(560, 24)
   $unsignedSupportCheck.Checked = $DefaultEnableUnsignedSupport
@@ -368,7 +368,7 @@ try {
 
   $registryBefore = Get-FastLoopUnsignedExtensionState -RegistryBasePath $RegistryBasePath
   if ($EnableUnsignedPanelSupport) {
-    Write-InstallLog -LogPath $installLogPath -Message "Enabling PlayerDebugMode for CEP 11 and CEP 12 under $RegistryBasePath"
+    Write-InstallLog -LogPath $installLogPath -Message "Enabling PlayerDebugMode for CEP 11, CEP 12, and CEP 13 under $RegistryBasePath"
     $null = Enable-FastLoopUnsignedExtensions -RegistryBasePath $RegistryBasePath
   } else {
     Write-InstallLog -LogPath $installLogPath -Message "Skipping unsigned CEP helper registry changes by request"
